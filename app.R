@@ -29,8 +29,8 @@ ui <- fluidPage(
         outputId = "volcanoPlot",
         click = clickOpts(id = "plot_click")
         ),
-      textOutput(outputId = "coordinates"),
-      tableOutput(outputId = "geneTable")
+      textOutput("coordinates"),
+      tableOutput("geneTable")
       
     ),
   )
@@ -40,7 +40,6 @@ ui <- fluidPage(
 server <- function(input, output) {
   
   get_data <- function(path) {
-    print(path)
     data <- read_excel(path, 1, na = "NA") %>%
       select(-baseMean, -lfcSE, -stat, -pvalue) %>%
       replace(is.na(.), 0)
