@@ -1,24 +1,26 @@
 volcanoPlotUI <- function(id, label = "Volcano plot") {
   ns <- NS(id)
   
-  sidebarLayout(
-    sidebarPanel(
-      checkboxGroupInput(ns("deseq2"), 
-                         label = "DeSEQ2 data",
-                         choices = list("Salivary gland" = deseq2_salivary_gland,
-                                        "Brain" = deseq2_brain,
-                                        "Wing disc" = deseq2_wing_disc)),
-      checkboxGroupInput(ns("day"),
-                         label = "Day",
-                         choices = list("D5" = 1,
-                                        "D6" = 2,
-                                        "D8" = 3))
-    ),
-    mainPanel(
-      h1("Volcano Plot"),
-      plotOutput(
-        ns("volcanoPlot"),
-        click = clickOpts(id = "plot_click")
+  tabPanel("Volcano plot",
+    sidebarLayout(
+      sidebarPanel(
+        checkboxGroupInput(ns("deseq2"), 
+                           label = "DeSEQ2 data",
+                           choices = list("Salivary gland" = deseq2_salivary_gland,
+                                          "Brain" = deseq2_brain,
+                                          "Wing disc" = deseq2_wing_disc)),
+        checkboxGroupInput(ns("day"),
+                           label = "Day",
+                           choices = list("D5" = 1,
+                                          "D6" = 2,
+                                          "D8" = 3))
+      ),
+      mainPanel(
+        h1("Volcano Plot"),
+        plotOutput(
+          ns("volcanoPlot"),
+          click = clickOpts(id = "plot_click")
+        ),
       )
     )
   )
@@ -36,20 +38,19 @@ volcanoPlotServer <- function(id) {
         return(data)
       }
       
+      deseq2_data <- vector()
+      deseq2_names <- vector()
+      
       output$volcanoPlot <- renderPlot({
         req(input$deseq2, input$day)
-        
-        deseq2_data <- list()
-        deseq2_names <- list()
         
         for (tissue in input$deseq2) {
           for (day in input$day) {
             tryCatch({
               day <- as.numeric(day)
               name <- excel_sheets(tissue)[day]
-              deseq2_names <- append(deseq2_names, name)
-              deseq2_data <- append(deseq2_data, lapply(tissue, get_data, sheet = day))
-              
+              deseq2_names <<- append(deseq2_names, name)
+              deseq2_data <<- append(deseq2_data, lapply(tissue, get_data, sheet = day))
             },
             error = function(cond) {
               print(cond)

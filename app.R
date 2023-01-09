@@ -12,8 +12,10 @@ deseq2_wing_disc <- "./data/DESEQ2 Results/Wing Disc/deseq2_wing_disc.xlsx"
 source("./module/volcano-plot.R", local = TRUE)
 
 ui <- fluidPage(
-  volcanoPlotUI("volcanoPlot", "Volcano plot")
-)
+  navbarPage("RNA-seq data",
+      volcanoPlotUI("volcanoPlot", "Volcano plot")
+    )
+  )
 
 server <- function(input, output, session) {
   volcano <- volcanoPlotServer("volcanoPlot")
