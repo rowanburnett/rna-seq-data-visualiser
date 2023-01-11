@@ -13,14 +13,29 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
                            label = "Day",
                            choices = list("D5" = 1,
                                           "D6" = 2,
-                                          "D8" = 3))
+                                          "D8" = 3)),
+        wellPanel(
+          p("Differentially expressed gene thresholds"),
+          numericInput(ns("pvalue"),
+                       label = "p-value",
+                       value = 0.05,
+                       min = 0,
+                       step = 0.01),
+          numericInput(ns("log2foldchange"),
+                       label = "Log2 fold change",
+                       value = 1.4,
+                       min = 0,
+                       step = 0.01)
+         )
       ),
+      
       mainPanel(
         h1("Volcano Plot"),
         plotOutput(
           ns("volcanoPlot"),
           click = clickOpts(id = "plot_click")
         ),
+        tableOutput(ns("geneTable"))
       )
     )
   )
@@ -31,6 +46,7 @@ volcanoPlotServer <- function(id) {
     id,
     
     function(input, output, session) {
+      # get data from excel files based on provided parameters
       get_data <- function(path, sheet) {
         data <- read_excel(path, sheet, na = "NA") %>%
           select(-baseMean, -lfcSE, -stat, -pvalue) %>%
@@ -38,12 +54,15 @@ volcanoPlotServer <- function(id) {
         return(data)
       }
       
-      deseq2_data <- vector()
-      deseq2_names <- vector()
+      deseq2_data <- c()
+      deseq2_names <- c()
       
       output$volcanoPlot <- renderPlot({
         req(input$deseq2, input$day)
+        deseq2_data <<- c()
+        deseq2_names <<- c()
         
+        # gather days and tissues to get from excel files - this isn't very good
         for (tissue in input$deseq2) {
           for (day in input$day) {
             tryCatch({
@@ -58,16 +77,17 @@ volcanoPlotServer <- function(id) {
           }
         }
         
+        # need to add names to data frame to tell data apart
         names(deseq2_data) <- c(deseq2_names)
         deseq2_data <- bind_rows(deseq2_data, .id = "Tissue")
         
+        # create volcano plot
         ggplot(data = deseq2_data, aes(x = log2FoldChange, y = -log10(padj), colour = Tissue)) +
           geom_point() +
           theme_minimal() +
-          geom_vline(xintercept=c(-1.4, 1.4), col="red") +
-          geom_hline(yintercept=-log10(0.05), col="red")
+          geom_vline(xintercept = c(-(input$log2foldchange), input$log2foldchange), col = "red") +
+          geom_hline(yintercept = -log10(input$pvalue), col = "red")
       })
-    
     }
   )
 }
