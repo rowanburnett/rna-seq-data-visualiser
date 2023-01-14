@@ -1,5 +1,3 @@
-
-
 volcanoPlotUI <- function(id, label = "Volcano plot") {
   ns <- NS(id)
   
@@ -47,21 +45,24 @@ volcanoPlotServer <- function(id) {
     
     function(input, output, session) {
       
+      # get gene symbols from gene ids
+      get_gene_names <- function(data){
+        data$symbols <- mapIds(org.Dm.eg.db, keys = data$id, keytype = "FLYBASE", column = "SYMBOL")
+      }
+      
       # get data from excel files based on provided parameters
       get_data <- function(path, sheet) {
         data <- read_excel(path, sheet, na = "NA") %>%
-          select(-baseMean, -lfcSE, -stat, -pvalue) %>%
+          dplyr::select(-baseMean, -lfcSE, -stat, -pvalue) %>%
           replace(is.na(.), 0)
-        return(data)
       }
       
-      deseq2_data <- c()
-      deseq2_names <- c()
       
       output$volcanoPlot <- renderPlot({
         req(input$tissues, input$genotypes)
-        deseq2_data <<- c()
-        deseq2_names <<- c()
+        
+        deseq2_names <- c()
+        deseq2_data <- data.frame()
         
         # gather tissues and genotype to get from excel files - this isn't very good
         for (tissue in input$tissues) {
@@ -72,8 +73,8 @@ volcanoPlotServer <- function(id) {
                 index <- which(tissue_values == tissue)
                 name <- tissue_names[index]
                 if (grepl(genotype, sheet)) {
-                  deseq2_names <<- append(deseq2_names, paste(name, ": ", genotype))
-                  deseq2_data <<- append(deseq2_data, lapply(tissue, get_data, sheet = sheet))
+                  deseq2_names <- append(deseq2_names, paste(name, ": ", genotype))
+                  deseq2_data <- append(deseq2_data, lapply(tissue, get_data, sheet = sheet))
                 }
               }
             },
@@ -83,9 +84,9 @@ volcanoPlotServer <- function(id) {
           }
         }
         
-        # need to add names to data frame to tell data apart
-        names(deseq2_data) <- c(deseq2_names)
-        deseq2_data <- bind_rows(deseq2_data, .id = "Genotype")
+        names(deseq2_data) <- c(deseq2_names) # add names to data frame to tell data apart
+        deseq2_data <- bind_rows(deseq2_data, .id = "Genotype") # 
+        deseq2_data <- mutate(deseq2_data, symbol = get_gene_names(deseq2_data))
         
         # create volcano plot
         ggplot(data = deseq2_data, aes(x = log2FoldChange, y = -log10(padj), colour = Genotype)) +

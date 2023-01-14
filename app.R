@@ -3,6 +3,9 @@ library(readxl)
 library(tidyverse)
 library(httr)
 library(jsonlite)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(org.Dm.eg.db)
 
 tissue_names <- list("Salivary gland", "Wing disc", "Brain")
 
