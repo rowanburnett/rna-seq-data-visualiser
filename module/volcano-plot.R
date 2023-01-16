@@ -53,8 +53,8 @@ volcanoPlotServer <- function(id) {
       # get data from excel files based on provided parameters
       get_data <- function(path, sheet) {
         data <- read_excel(path, sheet, na = "NA") %>%
-          dplyr::select(-baseMean, -lfcSE, -stat, -pvalue) %>%
-          replace(is.na(.), 0)
+          dplyr::select(-baseMean, -lfcSE, -stat) %>%
+          na.omit()
       }
       
       
@@ -85,15 +85,19 @@ volcanoPlotServer <- function(id) {
         }
         
         names(deseq2_data) <- c(deseq2_names) # add names to data frame to tell data apart
-        deseq2_data <- bind_rows(deseq2_data, .id = "Genotype") # 
-        deseq2_data <- mutate(deseq2_data, symbol = get_gene_names(deseq2_data))
+        deseq2_data <- bind_rows(deseq2_data) # 
+        deseq2_data <- mutate(deseq2_data, symbols = get_gene_names(deseq2_data))
         
         # create volcano plot
-        ggplot(data = deseq2_data, aes(x = log2FoldChange, y = -log10(padj), colour = Genotype)) +
-          geom_point() +
-          theme_minimal() +
-          geom_vline(xintercept = c(-(input$log2foldchange), input$log2foldchange), col = "red") +
-          geom_hline(yintercept = -log10(input$pvalue), col = "red")
+         EnhancedVolcano(deseq2_data, lab = deseq2_data$symbols, x = "log2FoldChange", y = "padj",
+           pCutoff = input$pvalue,
+           FCcutoff = input$log2foldchange)
+        
+        # ggplot(data = deseq2_data, aes(x = log2FoldChange, y = -log10(padj), colour = Genotype)) +
+        #   geom_point() +
+        #   theme_minimal() +
+        #   geom_vline(xintercept = c(-(input$log2foldchange), input$log2foldchange), col = "red") +
+        #   geom_hline(yintercept = -log10(input$pvalue), col = "red")
       })
     }
   )
