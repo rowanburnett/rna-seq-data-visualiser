@@ -22,7 +22,7 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
             plotOutput(
               ns("volcanoPlot"),
               height = "500px",
-              click = clickOpts(id = "plot_click")
+              click = ns("plot_click")
             ),
             tableOutput(ns("geneTable"))
           ),
@@ -39,6 +39,11 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
                          value = 1.4,
                          min = 0,
                          step = 0.01) 
+          ),
+          
+          box(
+            title = "Extra information",
+            htmlOutput(ns("geneInfo"))
           )
         )
       )
@@ -52,21 +57,20 @@ volcanoPlotServer <- function(id) {
     function(input, output, session) {
       
       # get gene symbols from gene ids
-      get_gene_names <- function(data){
-        data$symbols <- mapIds(org.Dm.eg.db, keys = data$id, keytype = "FLYBASE", column = "SYMBOL")
+      get_gene_names <- function(data) {
+        symbols <- mapIds(org.Dm.eg.db, keys = data$id, keytype = "FLYBASE", column = "SYMBOL")
+        unname(symbols)
       }
       
       # get data from excel files based on provided parameters
       get_data <- function(path, sheet) {
-        data <- read_excel(path, sheet, na = "NA") %>%
+        df <- read_excel(path, sheet, na = "NA") %>%
           dplyr::select(-baseMean, -lfcSE, -stat) %>%
-          na.omit()
+          na.omit() %>%
+          mutate("-log10(padj)" = -log10(padj))
       }
       
-      
-      output$volcanoPlot <- renderPlot({
-        req(input$tissues, input$genotypes)
-        
+      data <- reactive({
         deseq2_names <- c()
         deseq2_data <- data.frame()
         
@@ -92,18 +96,44 @@ volcanoPlotServer <- function(id) {
         
         names(deseq2_data) <- c(deseq2_names) # add names to data frame to tell data apart
         deseq2_data <- bind_rows(deseq2_data)
-        deseq2_data <- mutate(deseq2_data, symbols = get_gene_names(deseq2_data))
-        
+        deseq2_data <- mutate(deseq2_data, symbol = get_gene_names(deseq2_data))
+      })
+      
+      output$volcanoPlot <- renderPlot({
+        req(input$tissues, input$genotypes)
+
         # create volcano plot
-         EnhancedVolcano(deseq2_data, lab = deseq2_data$symbols, x = "log2FoldChange", y = "padj",
+         EnhancedVolcano(data(), lab = data()$symbol, x = "log2FoldChange", y = "padj",
            pCutoff = input$pvalue,
            FCcutoff = input$log2foldchange)
-        
-        # ggplot(data = deseq2_data, aes(x = log2FoldChange, y = -log10(padj), colour = Genotype)) +
-        #   geom_point() +
-        #   theme_minimal() +
-        #   geom_vline(xintercept = c(-(input$log2foldchange), input$log2foldchange), col = "red") +
-        #   geom_hline(yintercept = -log10(input$pvalue), col = "red")
+      })
+      
+      points <- reactive({
+        gene <- nearPoints(
+          data(), 
+          input$plot_click,
+          xvar = "log2FoldChange",
+          yvar = "-log10(padj)",
+          maxpoints = 1
+        )
+      })
+      
+      output$geneInfo <- renderUI({
+        req(input$plot_click)
+        tagList(
+          div(
+            span("Symbol:", style = "font-weight: bold;"), 
+            span(points()$symbol)),
+          div(
+            span("ID:", style = "font-weight: bold;"), 
+            span(points()$id)),
+          div(
+            span("Log2 fold change:", style = "font-weight: bold;"), 
+            span(points()$log2FoldChange)),
+          div(
+            span("p-value:", style = "font-weight: bold;"), 
+            span(points()$padj))
+        )
       })
     }
   )
