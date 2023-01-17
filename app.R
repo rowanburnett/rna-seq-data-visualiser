@@ -27,9 +27,7 @@ source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
 
 ui <- fluidPage(
-  navbarPage("RNA-seq data",
-      volcanoPlotUI("volcanoPlot", "Volcano plot"),
-    )
+    volcanoPlotUI("volcanoPlot", "Volcano plot"),
   )
 
 server <- function(input, output, session) {

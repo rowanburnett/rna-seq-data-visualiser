@@ -1,9 +1,9 @@
 volcanoPlotUI <- function(id, label = "Volcano plot") {
   ns <- NS(id)
   
-  tabPanel("Volcano plot",
-    sidebarLayout(
-      sidebarPanel(
+  dashboardPage(
+    dashboardHeader(title = "Volcano plot"),
+      dashboardSidebar(
         checkboxGroupInput(ns("genotypes"), 
                            label = "Genotypes",
                            choiceNames = genotype_names,
@@ -11,32 +11,38 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
         checkboxGroupInput(ns("tissues"),
                            label = "Tissues",
                            choiceNames = tissue_names,
-                           choiceValues = tissue_values),
-        wellPanel(
-          p("Differentially expressed gene thresholds"),
-          numericInput(ns("pvalue"),
-                       label = "p-value",
-                       value = 0.05,
-                       min = 0,
-                       step = 0.01),
-          numericInput(ns("log2foldchange"),
-                       label = "Log2 fold change",
-                       value = 1.4,
-                       min = 0,
-                       step = 0.01)
-         )
+                           choiceValues = tissue_values)
       ),
       
-      mainPanel(
-        h1("Volcano Plot"),
-        plotOutput(
-          ns("volcanoPlot"),
-          click = clickOpts(id = "plot_click")
-        ),
-        tableOutput(ns("geneTable"))
+      dashboardBody(
+        fluidRow(
+          box(
+            # could maybe create tabs to view each dataset on a different graph?
+            title = "Volcano plot", collapsible = TRUE,
+            plotOutput(
+              ns("volcanoPlot"),
+              height = "500px",
+              click = clickOpts(id = "plot_click")
+            ),
+            tableOutput(ns("geneTable"))
+          ),
+          
+          box(
+            title = "Differentially expressed gene thresholds", collapsible = TRUE,
+            numericInput(ns("pvalue"),
+                         label = "p-value",
+                         value = 0.05,
+                         min = 0,
+                         step = 0.01),
+            numericInput(ns("log2foldchange"),
+                         label = "Log2 fold change",
+                         value = 1.4,
+                         min = 0,
+                         step = 0.01) 
+          )
+        )
       )
     )
-  )
 }
 
 volcanoPlotServer <- function(id) {
@@ -85,7 +91,7 @@ volcanoPlotServer <- function(id) {
         }
         
         names(deseq2_data) <- c(deseq2_names) # add names to data frame to tell data apart
-        deseq2_data <- bind_rows(deseq2_data) # 
+        deseq2_data <- bind_rows(deseq2_data)
         deseq2_data <- mutate(deseq2_data, symbols = get_gene_names(deseq2_data))
         
         # create volcano plot
