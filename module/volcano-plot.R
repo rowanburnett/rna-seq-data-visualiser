@@ -99,6 +99,7 @@ volcanoPlotServer <- function(id) {
         deseq2_data <- mutate(deseq2_data, symbol = get_gene_names(deseq2_data))
       })
       
+      
       output$volcanoPlot <- renderPlot({
         req(input$tissues, input$genotypes)
 
@@ -108,7 +109,25 @@ volcanoPlotServer <- function(id) {
            FCcutoff = input$log2foldchange)
       })
       
-      points <- reactive({
+      point <- function(){
+        deseq2_data <- data()
+        gene <- nearPoints(
+          deseq2_data, 
+          input$plot_click,
+          xvar = "log2FoldChange",
+          yvar = "-log10(padj)",
+          maxpoints = 1
+        )
+      }
+      
+      summary <- function(id) {
+        res <- GET(glue("https://api.flybase.org/api/v1.0/gene/summaries/auto/{id}"))
+        summary <- fromJSON(rawToChar(res$content))
+        summary <- summary$resultset$result$summary
+      }
+      
+      output$geneInfo <- renderUI({
+        print(input$plot_click)
         gene <- nearPoints(
           data(), 
           input$plot_click,
@@ -116,24 +135,29 @@ volcanoPlotServer <- function(id) {
           yvar = "-log10(padj)",
           maxpoints = 1
         )
-      })
-      
-      output$geneInfo <- renderUI({
-        req(input$plot_click)
+        
+        if (length(gene$id) > 0) {
+          summ = summary(gene$id)
+          print(summ[1])
+        
         tagList(
           div(
             span("Symbol:", style = "font-weight: bold;"), 
-            span(points()$symbol)),
+            span(gene$symbol)),
           div(
             span("ID:", style = "font-weight: bold;"), 
-            span(points()$id)),
+            span(gene$id)),
           div(
             span("Log2 fold change:", style = "font-weight: bold;"), 
-            span(points()$log2FoldChange)),
+            span(gene$log2FoldChange)),
           div(
             span("p-value:", style = "font-weight: bold;"), 
-            span(points()$padj))
+            span(gene$padj)),
+          div(
+            span("Gene summary:", style = "font-weight: bold;"), 
+            span(summ))
         )
+        }
       })
     }
   )
