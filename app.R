@@ -8,6 +8,8 @@ library(clusterProfiler)
 library(AnnotationDbi)
 library(org.Dm.eg.db)
 library(EnhancedVolcano)
+library(glue)
+library(ComplexHeatmap)
 
 tissue_names <- list("Salivary gland", "Wing disc", "Brain")
 
@@ -28,10 +30,12 @@ source("./module/heat-map.R", local = TRUE)
 
 ui <- fluidPage(
     volcanoPlotUI("volcanoPlot", "Volcano plot"),
+    heatMapUI("heatMap", "Heat map")
   )
 
 server <- function(input, output, session) {
   volcano <- volcanoPlotServer("volcanoPlot")
+  heatmap <- heatMapServer("heatMap")
 }
 
 
