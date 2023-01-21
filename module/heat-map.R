@@ -54,7 +54,7 @@ heatMapUI <- function(id, label = "Heat map") {
           title = "Genes to include",
           textAreaInput(ns("gene_list"),
                         "Enter a list of FlyBase IDs:",
-                        placeholder = "Fbgn0000123...")
+                        placeholder = "FBgn0000123...")
         )
       )
     )
@@ -72,26 +72,37 @@ heatMapServer <- function(id) {
         print(sheet)
         df <- read_excel("C:/Users/puppy/OneDrive/Documents/projects/rna-seq-data-visualiser/data/CoreData/ALL_Tissues_LFC_Database.xlsx", sheet, na = "NA") %>%
           dplyr::filter(GeneID %in% genes) %>%
+          column_to_rownames("GeneID") %>%
           na.omit()
       }
       
-      heatmap <- reactive({
-        deseq2_data <- data.frame()
-
+      heatmaps <- reactive({
+        data <- data.frame()
+        heatmap_list <- NULL
         regFilter <- regex("FBGN\\d\\d\\d\\d\\d\\d\\d", ignore_case = TRUE, )
         gene_list <- as.list(str_extract_all(input$gene_list, regFilter))[[1]]
       
-        deseq2_data <- append(deseq2_data, get_data(input$tissues[1], gene_list)) %>%
-          bind_rows() %>%
-          column_to_rownames("GeneID")
+        
+        for (tissue in input$tissues) {
+          index <- which(tissue_values == tissue)
+          name <- tissue_names[index]
+          
+          data <- get_data(tissue, gene_list) %>%
+            as.matrix()
+          heatmap <- Heatmap(data, 
+                             col = colorScale,
+                             column_title = tissue)
+          heatmap_list <- heatmap_list + heatmap
+        }
+        
+        return(heatmap_list)
       })
       
       
       output$heatMap <- renderPlot({
         req(input$tissues, input$genotypes)
         colorScale <- colorRamp2(c(3,0,-3), c("blue", "white", "red"))
-        Heatmap(as.matrix(heatmap()), 
-                col = colorScale)
+        draw(heatmaps())
       })
     }
   )
