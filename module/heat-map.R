@@ -11,7 +11,9 @@ heatMapUI <- function(id, label = "Heat map") {
       checkboxGroupInput(ns("tissues"),
                          label = "Tissues",
                          choiceNames = tissue_names,
-                         choiceValues = tissue_values),
+                         choiceValues = list("SG_LFC_DATABASE",
+                                        "WD_LFC_DATABASE",
+                                        "BRAIN_LFC_DATABASE")),
       
       numericInput(ns("pvalue"),
                    label = "p-value",
@@ -46,6 +48,13 @@ heatMapUI <- function(id, label = "Heat map") {
         box(
           title = "Extra information",
           htmlOutput(ns("geneInfo"))
+        ),
+        
+        box(
+          title = "Genes to include",
+          textAreaInput(ns("gene_list"),
+                        "Enter a list of FlyBase IDs:",
+                        placeholder = "Fbgn0000123...")
         )
       )
     )
@@ -59,51 +68,30 @@ heatMapServer <- function(id) {
     function(input, output, session) {
       
       # get data from excel files based on provided parameters
-      get_data <- function(path, sheet) {
-        df <- read_excel(path, sheet, na = "NA") %>%
-          dplyr::select(-baseMean, -lfcSE, -stat, -padj, -pvalue) %>%
+      get_data <- function(sheet, genes) {
+        print(sheet)
+        df <- read_excel("C:/Users/puppy/OneDrive/Documents/projects/rna-seq-data-visualiser/data/CoreData/ALL_Tissues_LFC_Database.xlsx", sheet, na = "NA") %>%
+          dplyr::filter(GeneID %in% genes) %>%
           na.omit()
       }
       
-      heatmaps <- reactive({
-        deseq2_names <- c()
-        heatmaps <- NULL
-        
-        # gather tissues and genotype to get from excel files - this isn't very good
-        for (tissue in input$tissues) {
-          for (genotype in input$genotypes) {
-            tryCatch({
-              sheets <- excel_sheets(tissue)
-              for (sheet in sheets) {
-                index <- which(tissue_values == tissue)
-                name <- tissue_names[index]
-                if (grepl(genotype, sheet)) {
-                  deseq2_data <- data.frame()
-                  deseq2_data <- append(deseq2_data, lapply(tissue, get_data, sheet = sheet)) %>%
-                    bind_rows(deseq2_data) %>%
-                    dplyr::slice(10:20) %>%
-                    column_to_rownames(var = "id") %>%
-                    rename(log2FoldChange = paste(name, genotype)) %>%
-                    
-                    as.matrix()
-                  heatmap <- Heatmap(deseq2_data)
-                  heatmaps <- heatmaps + heatmap
-                  
-                }
-              }
-            },
-            error = function(cond) {
-              print(cond)
-            })
-          }
-        }
-        return(heatmaps)
+      heatmap <- reactive({
+        deseq2_data <- data.frame()
+
+        regFilter <- regex("FBGN\\d\\d\\d\\d\\d\\d\\d", ignore_case = TRUE, )
+        gene_list <- as.list(str_extract_all(input$gene_list, regFilter))[[1]]
+      
+        deseq2_data <- append(deseq2_data, get_data(input$tissues[1], gene_list)) %>%
+          bind_rows() %>%
+          column_to_rownames("GeneID")
       })
       
       
       output$heatMap <- renderPlot({
         req(input$tissues, input$genotypes)
-        draw(heatmaps())
+        colorScale <- colorRamp2(c(3,0,-3), c("blue", "white", "red"))
+        Heatmap(as.matrix(heatmap()), 
+                col = colorScale)
       })
     }
   )
