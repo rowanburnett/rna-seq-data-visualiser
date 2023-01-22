@@ -11,39 +11,38 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
         checkboxGroupInput(ns("tissues"),
                            label = "Tissues",
                            choiceNames = tissue_names,
-                           choiceValues = tissue_values)
+                           choiceValues = tissue_values),
+        numericInput(ns("pvalue"),
+                     label = "p-value",
+                     value = 0.05,
+                     min = 0,
+                     step = 0.01),
+        numericInput(ns("log2foldchange"),
+                     label = "Log2 fold change",
+                     value = 1.4,
+                     min = 0,
+                     step = 0.01),
+        fileInput(ns("file"),
+                  "Upload CSV or Excel workbook",
+                  buttonLabel = "Browse...",
+                  placeholder = "No file selected")
       ),
       
       dashboardBody(
         fluidRow(
-          box(
-            # could maybe create tabs to view each dataset on a different graph?
-            title = "Volcano plot", collapsible = TRUE,
-            plotOutput(
-              ns("volcanoPlot"),
-              height = "500px",
-              click = ns("plot_click")
-            ),
-            tableOutput(ns("geneTable"))
+          tabBox(
+            id = ns("tabset"),
+            title = "Volcano plot"
           ),
-          
-          box(
-            title = "Differentially expressed gene thresholds", collapsible = TRUE,
-            numericInput(ns("pvalue"),
-                         label = "p-value",
-                         value = 0.05,
-                         min = 0,
-                         step = 0.01),
-            numericInput(ns("log2foldchange"),
-                         label = "Log2 fold change",
-                         value = 1.4,
-                         min = 0,
-                         step = 0.01) 
-          ),
-          
+        
           box(
             title = "Extra information",
             htmlOutput(ns("geneInfo"))
+          ),
+          
+          box(
+            title = "File",
+            textOutput(ns("fileInfo"))
           )
         )
       )
@@ -55,6 +54,8 @@ volcanoPlotServer <- function(id) {
     id,
     
     function(input, output, session) {
+      # increase max request size to upload files up to 100mb
+      options(shiny.maxRequestSize=100*1024^2)
       
       # get gene symbols from gene ids
       get_gene_names <- function(data) {
@@ -70,10 +71,24 @@ volcanoPlotServer <- function(id) {
           mutate("-log10(padj)" = -log10(padj))
       }
       
+      observeEvent(data(), {
+        print(data())
+        for (data in data()) {
+            appendTab("tabset",
+                        tabPanel("Tab",
+                          renderPlot({
+                            EnhancedVolcano(data, lab = "id", x = "log2FoldChange", y = "padj",
+                                               pCutoff = input$pvalue,
+                                               FCcutoff = input$log2foldchange)
+                             })
+                        )
+                      )
+                    }
+      })
+      
       data <- reactive({
-        deseq2_names <- c()
         deseq2_data <- data.frame()
-        
+
         # gather tissues and genotype to get from excel files - this isn't very good
         for (tissue in input$tissues) {
           for (genotype in input$genotypes) {
@@ -83,7 +98,6 @@ volcanoPlotServer <- function(id) {
                 index <- which(tissue_values == tissue)
                 name <- tissue_names[index]
                 if (grepl(genotype, sheet)) {
-                  deseq2_names <- append(deseq2_names, paste(name, ": ", genotype))
                   deseq2_data <- append(deseq2_data, lapply(tissue, get_data, sheet = sheet))
                 }
               }
@@ -93,10 +107,7 @@ volcanoPlotServer <- function(id) {
             })
           }
         }
-        
-        names(deseq2_data) <- c(deseq2_names) # add names to data frame to tell data apart
-        deseq2_data <- bind_rows(deseq2_data)
-        deseq2_data <- mutate(deseq2_data, symbol = get_gene_names(deseq2_data))
+        return(deseq2_data)
       })
       
       
@@ -127,7 +138,6 @@ volcanoPlotServer <- function(id) {
       }
       
       output$geneInfo <- renderUI({
-        print(input$plot_click)
         gene <- nearPoints(
           data(), 
           input$plot_click,
@@ -138,7 +148,6 @@ volcanoPlotServer <- function(id) {
         
         if (length(gene$id) > 0) {
           summ = summary(gene$id)
-          print(summ[1])
         
         tagList(
           div(
@@ -157,8 +166,23 @@ volcanoPlotServer <- function(id) {
             span("Gene summary:", style = "font-weight: bold;"), 
             span(summ))
         )
+      }
+      })
+      
+      output$fileInfo <- renderPrint({
+        file <- input$file
+        req(file)
+        print(file)
+        ext <- tools::file_ext(file$datapath)
+        
+        
+        if (ext == "csv") {
+          print("csv file")
+        } else {
+          print("not csv file")
         }
+        
       })
     }
-  )
-}
+
+)}
