@@ -1,9 +1,10 @@
 volcanoPlotUI <- function(id, label = "Volcano plot") {
   ns <- NS(id)
-  
-  dashboardPage(
-    dashboardHeader(title = "Volcano plot"),
-      dashboardSidebar(
+      
+    fluidRow(
+      htmlOutput(ns("plots")),
+      
+      box(
         checkboxGroupInput(ns("genotypes"), 
                            label = "Genotypes",
                            choiceNames = genotype_names,
@@ -13,7 +14,7 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
                            label = "Tissues",
                            choiceNames = tissue_names,
                            choiceValues = tissue_values),
-        
+    
         numericInput(ns("pvalue"),
                      label = "p-value",
                      value = 0.05,
@@ -24,28 +25,12 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
                      label = "Log2 fold change",
                      value = 1.4,
                      min = 0,
-                     step = 0.01),
-        
-        fileInput(ns("file"),
-                  "Upload CSV or Excel workbook",
-                  buttonLabel = "Browse...",
-                  placeholder = "No file selected")
+                     step = 0.01)
       ),
       
-      dashboardBody(
-        fluidRow(
-          htmlOutput(ns("plots")),
-          
-          box(
-            title = "Extra information",
-            htmlOutput(ns("geneInfo"))
-          ),
-          
-          box(
-            title = "File",
-            textOutput(ns("fileInfo"))
-          )
-        )
+      box(
+        title = "Extra information",
+        htmlOutput(ns("geneInfo"))
       )
     )
 }
@@ -170,19 +155,5 @@ volcanoPlotServer <- function(id) {
         summary <- fromJSON(rawToChar(res$content))
         summary <- summary$resultset$result$summary
       }
-      
-      output$fileInfo <- renderPrint({
-        file <- input$file
-        req(file)
-        print(file)
-        ext <- tools::file_ext(file$datapath)
-        
-        if (ext == "csv") {
-          print("csv file")
-        } else {
-          print("not csv file")
-        }
-        
-      })
     }
 )}

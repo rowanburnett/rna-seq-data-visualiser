@@ -5,11 +5,12 @@ library(tidyverse)
 library(httr)
 library(jsonlite)
 library(clusterProfiler)
-library(AnnotationDbi)
+library(AnnotationDbi)  
 library(org.Dm.eg.db)
 library(EnhancedVolcano)
 library(glue)
 library(ComplexHeatmap)
+library(circlize)
 
 tissue_names <- list("Salivary gland", "Wing disc", "Brain")
 
@@ -25,13 +26,29 @@ genotype_values <- list("RasYki_D5","RasYki_D8","Fer12OG_D6",
                     "Fer12OG_D8","Fer12WT_D6","ImpL2i_D6",
                     "ImpL2i_D8") 
 
+
 source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
 
 ui <- fluidPage(
-    volcanoPlotUI("volcanoPlot", "Volcano plot"),
-    heatMapUI("heatMap", "Heat map")
+  dashboardPage(
+    dashboardHeader(title = "Data visualisation"),
+    dashboardSidebar(
+      sidebarMenu(
+        menuItem("Volcano plot", tabName = "volcanoPlot"),
+        menuItem("Heat map", tabName = "heatMap")
+      )
+    ),
+    dashboardBody(
+      tabItems(
+        tabItem(tabName = "volcanoPlot",
+                volcanoPlotUI("volcanoPlot", "Volcano plot")),
+        tabItem(tabName = "heatMap",
+                heatMapUI("heatMap", "Heat map"))
+      )
+    )
   )
+)
 
 server <- function(input, output, session) {
   volcano <- volcanoPlotServer("volcanoPlot")
