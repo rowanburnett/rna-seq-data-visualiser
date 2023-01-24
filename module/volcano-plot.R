@@ -1,9 +1,8 @@
 volcanoPlotUI <- function(id, label = "Volcano plot") {
   ns <- NS(id)
-      
+  fluidPage(
     fluidRow(
       htmlOutput(ns("plots")),
-      
       box(
         checkboxGroupInput(ns("genotypes"), 
                            label = "Genotypes",
@@ -25,6 +24,12 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
                      label = "Log2 fold change",
                      value = 1.4,
                      min = 0,
+                     step = 0.01),
+        
+        numericInput(ns("lfcLimit"),
+                     label = "Maximum log2 fold change to display",
+                     value = 10,
+                     min = 1,
                      step = 0.01)
       ),
       
@@ -33,6 +38,7 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
         htmlOutput(ns("geneInfo"))
       )
     )
+  )
 }
 
 volcanoPlotServer <- function(id) {
@@ -71,7 +77,8 @@ volcanoPlotServer <- function(id) {
             print(head(data))
             EnhancedVolcano(data, lab = data$symbol, x = "log2FoldChange", y = "padj",
                             pCutoff = input$pvalue,
-                            FCcutoff = input$log2foldchange)
+                            FCcutoff = input$log2foldchange,
+                            xlim = c(-input$lfcLimit, input$lfcLimit))
           })
         })
       })
