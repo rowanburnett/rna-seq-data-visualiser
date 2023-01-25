@@ -11,6 +11,7 @@ library(EnhancedVolcano)
 library(glue)
 library(ComplexHeatmap)
 library(circlize)
+library(openxlsx)
 
 tissue_names <- list("Salivary gland", "Wing disc", "Brain")
 
@@ -29,6 +30,7 @@ genotype_values <- list("RasYki_D5","RasYki_D8","Fer12OG_D6",
 
 source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
+source("./module/upload.R", local = TRUE)
 
 ui <- fluidPage(
   dashboardPage(
@@ -36,7 +38,8 @@ ui <- fluidPage(
     dashboardSidebar(
       sidebarMenu(
         menuItem("Volcano plot", tabName = "volcanoPlot"),
-        menuItem("Heat map", tabName = "heatMap")
+        menuItem("Heat map", tabName = "heatMap"),
+        uploadUI("upload", "Upload")
       )
     ),
     dashboardBody(
@@ -53,6 +56,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   volcano <- volcanoPlotServer("volcanoPlot")
   heatmap <- heatMapServer("heatMap")
+  upload <- uploadServer("upload")
 }
 
 
