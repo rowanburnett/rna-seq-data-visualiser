@@ -26,13 +26,20 @@ uploadServer <- function(id) {
           return(NULL)
         } else if (ext == "csv") {
           newFile <- read.csv(file$datapath)
-          write.csv(newFile, file = paste0("./data/Uploads/", file$name))
+          write.csv(newFile, file = paste0("./data/Uploads/", file$name), row.names = FALSE)
           
           # currently only writes one sheet for workbooks
         } else if (ext == "xlsx" || ext == "xls") { 
-          newFile <- read_excel(file$datapath)
-          write.xlsx(newFile, file = paste0("./data/Uploads/", file$name))
+          dataframes <- list()
+          sheets <- excel_sheets(file$datapath)
+          for (sheet in sheets) {
+            newSheet <- read_excel(file$datapath, sheet = sheet)
+            dataframes[[sheet]] <- newSheet
+            write.xlsx(dataframes, file = paste0("./data/Uploads/", file$name), rowNames = FALSE)
+          }
         }
+        
+        uploaded_files <<- list.files("./data/Uploads/")
       })
     }
   )
