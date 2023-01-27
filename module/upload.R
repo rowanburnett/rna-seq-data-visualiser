@@ -6,7 +6,7 @@ uploadUI <- function(id, label = "Upload") {
               "Upload CSV or Excel workbook",
               buttonLabel = "Browse...",
               placeholder = "No file selected"),
-    selectInput(ns("fileSelect"),
+    checkboxGroupInput(ns("fileSelect"),
                 "Uploaded files",
                 choices = NULL)
   )
@@ -21,7 +21,7 @@ uploadServer <- function(id) {
       options(shiny.maxRequestSize=100*1024^2)
       
       uploaded_files <- list.files(path = "./data/Uploads")
-      updateSelectInput(session, "fileSelect",
+      updateCheckboxGroupInput(session, "fileSelect", "Uploaded files",
                         choices = uploaded_files)
       
       observeEvent(input$file, {

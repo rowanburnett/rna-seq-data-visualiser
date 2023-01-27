@@ -4,15 +4,17 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
     htmlOutput(ns("plots"),
                label = "Volcano plot"),
     box(
-      checkboxGroupInput(ns("genotypes"), 
+      checkboxGroupInput(ns("genotypes"),
                          label = "Genotypes",
                          choiceNames = genotype_names,
                          choiceValues = genotype_values),
-      
+
       checkboxGroupInput(ns("tissues"),
                          label = "Tissues",
                          choiceNames = tissue_names,
                          choiceValues = tissue_values),
+      
+      htmlOutput(ns("dataChoices")),
   
       numericInput(ns("pvalue"),
                    label = "p-value",
@@ -50,8 +52,33 @@ volcanoPlotServer <- function(id, dataset) {
     function(input, output, session) {
       # need to use session namespace for ui elements created in server function
       ns <- session$ns
+
+      output$dataChoices <- renderUI({
+        tagList(
+          lapply(dataset(), function(file) {
+            ext <- tools::file_ext(file)
+            
+            if (ext == "csv") {
+              checkboxGroupInput(ns(file), 
+                                 tools::file_path_sans_ext(file), 
+                                 choices = file)
+              
+            } else if (ext == "xls" || ext == "xlsx") {
+              sheets <- excel_sheets(paste0("./data/Uploads/", file))
+              choices <- c()
+              
+              for (sheet in sheets) {
+                choices <- append(choices, sheet)
+              }
+              
+              checkboxGroupInput(ns(file), 
+                                 tools::file_path_sans_ext(file), 
+                                 choices = choices)
+            }
+        })
+        )
+      })
       
-      observe(print(dataset()))
       # get gene symbols from gene ids
       get_gene_names <- function(df) {
         symbols <- mapIds(org.Dm.eg.db, 
