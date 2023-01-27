@@ -27,7 +27,6 @@ genotype_values <- list("RasYki_D5","RasYki_D8","Fer12OG_D6",
                     "Fer12OG_D8","Fer12WT_D6","ImpL2i_D6",
                     "ImpL2i_D8") 
 
-
 source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
 source("./module/upload.R", local = TRUE)
@@ -39,24 +38,28 @@ ui <- fluidPage(
       sidebarMenu(
         menuItem("Volcano plot", tabName = "volcanoPlot"),
         menuItem("Heat map", tabName = "heatMap"),
-        uploadUI("upload", "Upload")
+        uploadUI("upload")
       )
     ),
     dashboardBody(
       tabItems(
         tabItem(tabName = "volcanoPlot",
-                volcanoPlotUI("volcanoPlot", "Volcano plot")),
+                volcanoPlotUI("volcanoPlot")),
         tabItem(tabName = "heatMap",
-                heatMapUI("heatMap", "Heat map"))
+                heatMapUI("heatMap"))
       )
     )
   )
 )
 
 server <- function(input, output, session) {
-  volcano <- volcanoPlotServer("volcanoPlot")
-  heatmap <- heatMapServer("heatMap")
   upload <- uploadServer("upload")
+  volcano <- volcanoPlotServer("volcanoPlot", dataset = upload)
+  heatMap <- heatMapServer("heatMap", dataset = upload)
+  
+  # increase max request size to upload files up to 100mb
+  options(shiny.maxRequestSize=100*1024^2)
+  
 }
 
 

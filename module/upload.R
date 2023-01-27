@@ -6,6 +6,9 @@ uploadUI <- function(id, label = "Upload") {
               "Upload CSV or Excel workbook",
               buttonLabel = "Browse...",
               placeholder = "No file selected"),
+    selectInput(ns("fileSelect"),
+                "Uploaded files",
+                choices = NULL)
   )
 }
 
@@ -16,6 +19,10 @@ uploadServer <- function(id) {
     function(input, output, session) {
       # increase max request size to upload files up to 100mb
       options(shiny.maxRequestSize=100*1024^2)
+      
+      uploaded_files <- list.files(path = "./data/Uploads")
+      updateSelectInput(session, "fileSelect",
+                        choices = uploaded_files)
       
       observeEvent(input$file, {
         file <- input$file
@@ -39,8 +46,16 @@ uploadServer <- function(id) {
           }
         }
         
-        uploaded_files <<- list.files("./data/Uploads/")
+        uploaded_files <- list.files("./data/Uploads/")
+        updateSelectInput(session, "fileSelect",
+                          choices = uploaded_files)
       })
+      
+      return(
+        dataset <- reactive({
+          session$input$fileSelect
+        })
+      )
     }
   )
 }

@@ -1,47 +1,49 @@
 volcanoPlotUI <- function(id, label = "Volcano plot") {
   ns <- NS(id)
   fluidPage(
-    fluidRow(
-      htmlOutput(ns("plots")),
-      box(
-        checkboxGroupInput(ns("genotypes"), 
-                           label = "Genotypes",
-                           choiceNames = genotype_names,
-                           choiceValues = genotype_values),
-        
-        checkboxGroupInput(ns("tissues"),
-                           label = "Tissues",
-                           choiceNames = tissue_names,
-                           choiceValues = tissue_values),
-    
-        numericInput(ns("pvalue"),
-                     label = "p-value",
-                     value = 0.05,
-                     min = 0,
-                     step = 0.01),
-        
-        numericInput(ns("log2foldchange"),
-                     label = "Log2 fold change",
-                     value = 1.4,
-                     min = 0,
-                     step = 0.01),
-        
-        numericInput(ns("lfcLimit"),
-                     label = "Maximum log2 fold change to display",
-                     value = 10,
-                     min = 1,
-                     step = 0.01)
-      ),
+    htmlOutput(ns("plots"),
+               label = "Volcano plot"),
+    box(
+      checkboxGroupInput(ns("genotypes"), 
+                         label = "Genotypes",
+                         choiceNames = genotype_names,
+                         choiceValues = genotype_values),
       
-      box(
-        title = "Extra information",
-        htmlOutput(ns("geneInfo"))
-      )
+      checkboxGroupInput(ns("tissues"),
+                         label = "Tissues",
+                         choiceNames = tissue_names,
+                         choiceValues = tissue_values),
+  
+      numericInput(ns("pvalue"),
+                   label = "p-value",
+                   value = 0.05,
+                   min = 0,
+                   step = 0.01),
+      
+      numericInput(ns("log2foldchange"),
+                   label = "Log2 fold change",
+                   value = 1.4,
+                   min = 0,
+                   step = 0.01),
+      
+      numericInput(ns("lfcLimit"),
+                   label = "Maximum log2 fold change to display",
+                   value = 10,
+                   min = 1,
+                   step = 0.01),
+      textAreaInput(ns("gene_list"),
+                    label = "Enter a list of gene symbols to label",
+                    placeholder = "")
+    ),
+    
+    box(
+      title = "Extra information",
+      htmlOutput(ns("geneInfo"))
     )
   )
 }
 
-volcanoPlotServer <- function(id) {
+volcanoPlotServer <- function(id, dataset) {
   moduleServer(
     id,
     
@@ -49,9 +51,7 @@ volcanoPlotServer <- function(id) {
       # need to use session namespace for ui elements created in server function
       ns <- session$ns
       
-      # increase max request size to upload files up to 100mb
-      options(shiny.maxRequestSize=100*1024^2)
-      
+      observe(print(dataset()))
       # get gene symbols from gene ids
       get_gene_names <- function(df) {
         symbols <- mapIds(org.Dm.eg.db, 
@@ -66,19 +66,32 @@ volcanoPlotServer <- function(id) {
           dplyr::select(-baseMean, -lfcSE, -stat) %>%
           na.omit() %>%
           mutate("-log10(padj)" = -log10(padj))
+        df <- mutate(df, "symbol" = get_gene_names(df))
       }
+      
+      # genes to label on the plot (optional)
+      geneList <- reactive({
+        geneList <- as.list(el(strsplit(input$gene_list, " ")))
+      })
       
       # render plots dynamically 
       observeEvent(data(), {
         lapply(seq(data()), function(i) {
           output[[paste0("plot", i) ]] <- renderPlot({
             data <- data()[[i]]
-            data <- mutate(data, "symbol" = get_gene_names(data))
-            print(head(data))
+            
+            # if list of genes is provided then use it
+            if (length(geneList()) > 0) {
+              labelledGenes <<- geneList()
+            } else {
+              labelledGenes <<- NULL
+            }
+            
             EnhancedVolcano(data, lab = data$symbol, x = "log2FoldChange", y = "padj",
                             pCutoff = input$pvalue,
                             FCcutoff = input$log2foldchange,
-                            xlim = c(-input$lfcLimit, input$lfcLimit))
+                            xlim = c(-input$lfcLimit, input$lfcLimit),
+                            selectLab = labelledGenes)
           })
         })
       })
