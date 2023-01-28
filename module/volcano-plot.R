@@ -4,16 +4,6 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
     htmlOutput(ns("plots"),
                label = "Volcano plot"),
     box(
-      checkboxGroupInput(ns("genotypes"),
-                         label = "Genotypes",
-                         choiceNames = genotype_names,
-                         choiceValues = genotype_values),
-
-      checkboxGroupInput(ns("tissues"),
-                         label = "Tissues",
-                         choiceNames = tissue_names,
-                         choiceValues = tissue_values),
-      
       htmlOutput(ns("dataChoices")),
   
       numericInput(ns("pvalue"),
@@ -87,15 +77,6 @@ volcanoPlotServer <- function(id, dataset) {
                           column = "SYMBOL")
       }
       
-      # get data from excel files based on provided parameters
-      get_data <- function(path, sheet) {
-        df <- read_excel(path, sheet, na = "NA") %>%
-          dplyr::select(-baseMean, -lfcSE, -stat) %>%
-          na.omit() %>%
-          mutate("-log10(padj)" = -log10(padj))
-        df <- mutate(df, "symbol" = get_gene_names(df))
-      }
-      
       # genes to label on the plot (optional)
       geneList <- reactive({
         geneList <- as.list(el(strsplit(input$gene_list, " ")))
@@ -133,32 +114,32 @@ volcanoPlotServer <- function(id, dataset) {
         })))
       })
       
-      # gather tissues and genotypes to get from excel files
       data <- reactive({
-        data <- list()
-
-        for (tissue in input$tissues) {
-          for (genotype in input$genotypes) {
-            tryCatch({
-              sheets <- excel_sheets(tissue)
-              for (sheet in sheets) {
-                
-                # get tissue name for plot title
-                tissue_index <- which(tissue_values == tissue)
-                tissue_name <- tissue_names[tissue_index]
-                
-                # check if genotype in sheet name - need to do this a better way
-                if (grepl(genotype, sheet)) {
-                  data[[paste0(tissue_name, " ", genotype)]] <- get_data(tissue, sheet)
-                }
-              }
-            },
-            error = function(cond) {
-              print(cond)
-            })
+        dataList <- list()
+        lapply(dataset(), function(data) {
+          for (file in input[[data]]) {
+            ext <- tools::file_ext(data)
+            
+            df <- data.frame()
+            if (ext == "xls" || ext == "xlsx") {
+              df <- read_excel(paste0("./data/Uploads/", data), file, na = "na")
+              
+            } else if (ext == "csv") {
+              df <- read.csv(paste0("./data/Uploads/", data))
+            }
+            
+            df[,-1] <- lapply(df[,-1], as.numeric)
+            colnames(df)[1] <- "id"
+            df <- dplyr::select(df, -baseMean, -lfcSE, -stat) %>%
+              mutate("-log10(padj)" = -log10(padj)) %>%
+              na.omit()
+            df <- mutate(df, "symbol" = get_gene_names(df))
+              print(df)
+              
+            dataList[[paste0(data, " ", file)]] <<- df
           }
-        }
-        return(data)
+        })
+        return(dataList)
       })
       
       # extra gene info box
