@@ -8,10 +8,12 @@ library(clusterProfiler)
 library(AnnotationDbi)  
 library(org.Dm.eg.db)
 library(EnhancedVolcano)
-library(glue)
 library(ComplexHeatmap)
 library(circlize)
 library(openxlsx)
+library(gprofiler2)
+library(enrichplot)
+library(DOSE)
 
 tissue_names <- list("Salivary gland", "Wing disc", "Brain")
 
@@ -30,6 +32,7 @@ genotype_values <- list("RasYki_D5","RasYki_D8","Fer12OG_D6",
 source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
 source("./module/upload.R", local = TRUE)
+source("./module/gene-enrichment-analysis.R", local = TRUE)
 
 ui <- fluidPage(
   dashboardPage(
@@ -38,6 +41,7 @@ ui <- fluidPage(
       sidebarMenu(
         menuItem("Volcano plot", tabName = "volcanoPlot"),
         menuItem("Heat map", tabName = "heatMap"),
+        menuItem("Gene enrichment analysis", tabName = "geneEnrichment"),
         uploadUI("upload")
       )
     ),
@@ -46,7 +50,9 @@ ui <- fluidPage(
         tabItem(tabName = "volcanoPlot",
                 volcanoPlotUI("volcanoPlot")),
         tabItem(tabName = "heatMap",
-                heatMapUI("heatMap"))
+                heatMapUI("heatMap")),
+        tabItem(tabName = "geneEnrichment",
+                geneEnrichmentUI("geneEnrichment")),
       )
     )
   )
@@ -56,10 +62,7 @@ server <- function(input, output, session) {
   upload <- uploadServer("upload")
   volcano <- volcanoPlotServer("volcanoPlot", dataset = upload)
   heatMap <- heatMapServer("heatMap", dataset = upload)
-  
-  # increase max request size to upload files up to 100mb
-  options(shiny.maxRequestSize=100*1024^2)
-  
+  geneEnrichment <- geneEnrichmentServer("geneEnrichment", dataset = upload)
 }
 
 
