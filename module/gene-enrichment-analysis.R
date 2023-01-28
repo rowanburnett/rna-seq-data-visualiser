@@ -92,13 +92,12 @@ geneEnrichmentServer <- function(id, dataset) {
             
             df[,-1] <- lapply(df[,-1], as.numeric)
             colnames(df)[1] <- "id"
-            df <- dplyr::select(df, -baseMean, -lfcSE, -stat) %>%
-              mutate("-log10(padj)" = -log10(padj)) %>%
+            df <- dplyr::select(df, id, padj, log2FoldChange) %>%
               na.omit() %>%
-              filter(padj < 0.05 & !between(log2FoldChange, -1.4, 1.4))
+              filter(padj < 0.05)
             df <- mutate(df, "symbol" = get_gene_names(df))
-            print(df)
-            
+            df <- column_to_rownames(df, "id")
+
             dataList[[paste0(data, " ", file)]] <<- df
           }
         })
@@ -106,11 +105,32 @@ geneEnrichmentServer <- function(id, dataset) {
       })
       
       output$plots <- renderPlot({
-        for (i in data()) {
-          downregulatedGenes <- filter(i, log2FoldChange < -1.4)
-          upregulatedGenes <- filter(i, log2FoldChange > 1.4)
-          print(downregulatedGenes)
-          print(upregulatedGenes)
+        for (genes in data()) {
+          downregulatedGenes <- filter(genes, log2FoldChange < -1.4)
+          upregulatedGenes <- filter(genes, log2FoldChange > 1.4)
+
+          multiGP <- gost(query = list("Upregulated" = rownames(upregulatedGenes), 
+                                       "Downregulated" = rownames(downregulatedGenes)), 
+                          organism = "dmelanogaster",
+                          multi_query = FALSE, evcodes = TRUE)
+      
+          
+          gp_mod = multiGP$result[,c("query", "source", "term_id",
+                                     "term_name", "p_value", "query_size", 
+                                     "intersection_size", "term_size", 
+                                     "effective_domain_size", "intersection")]
+          
+          gp_mod$GeneRatio <- paste0(gp_mod$intersection_size, "/", gp_mod$query_size)
+          gp_mod$BgRatio <- paste0(gp_mod$term_size, "/", gp_mod$effective_domain_size)
+          names(gp_mod) <- c("Cluster", "Category", "ID", "Description", "p.adjust", 
+                             "query_size", "Count", "term_size", "effective_domain_size", 
+                             "geneID", "GeneRatio", "BgRatio")
+          gp_mod$geneID <- gsub(",", "/", gp_mod$geneID)
+          gp_mod <- gp_mod[!duplicated(gp_mod$ID),]
+          row.names(gp_mod) = gp_mod$ID
+          
+          gp_mod_cluster = new("compareClusterResult", compareClusterResult = gp_mod)
+          print(enrichplot::dotplot(gp_mod_cluster, x = "Count", group = TRUE, by = "GeneRatio"))
         }
       })
     }
