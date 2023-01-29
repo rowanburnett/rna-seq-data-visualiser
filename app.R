@@ -15,20 +15,6 @@ library(gprofiler2)
 library(enrichplot)
 library(DOSE)
 
-tissue_names <- list("Salivary gland", "Wing disc", "Brain")
-
-tissue_values <- list("./data/DESEQ2 Results/Salivary Gland/deseq2_salivary_gland.xlsx", 
-                      "./data/DESEQ2 Results/Wing Disc/deseq2_wing_disc.xlsx", 
-                      "./data/DESEQ2 Results/Brain/deseq2_brain.xlsx")
-
-genotype_names <- list("RasYki (D5)","RasYki (D8)","Feritin (D6)",
-                  "Feritin (D8)", "Feritin WT looking (D6)",
-                  "ImpL2 RNAi (D6)", "ImpL2 RNAi (D8)")
-
-genotype_values <- list("RasYki_D5","RasYki_D8","Fer12OG_D6",
-                    "Fer12OG_D8","Fer12WT_D6","ImpL2i_D6",
-                    "ImpL2i_D8") 
-
 source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
 source("./module/upload.R", local = TRUE)
@@ -36,8 +22,12 @@ source("./module/gene-enrichment-analysis.R", local = TRUE)
 
 ui <- fluidPage(
   dashboardPage(
-    dashboardHeader(title = "Data visualisation"),
+    dashboardHeader(
+      title = "RNA-seq data visualisation",
+      titleWidth = "300px"
+      ),
     dashboardSidebar(
+      width = "300px",
       sidebarMenu(
         menuItem("Volcano plot", tabName = "volcanoPlot"),
         menuItem("Heat map", tabName = "heatMap"),

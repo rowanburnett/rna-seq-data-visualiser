@@ -12,13 +12,6 @@ heatMapUI <- function(id, label = "Heat map") {
         ),
         
         box(
-          checkboxGroupInput(ns("tissues"),
-                             label = "Tissues",
-                             choiceNames = tissue_names,
-                             choiceValues = list("SG_LFC_DATABASE",
-                                                 "WD_LFC_DATABASE",
-                                                 "BRAIN_LFC_DATABASE")),
-          
           htmlOutput(ns("dataChoices")),
           
           textAreaInput(ns("gene_list"),
@@ -41,6 +34,7 @@ heatMapServer <- function(id, dataset) {
       # need to use session namespace for ui elements created in server function
       ns <- session$ns
       
+      # create checkboxes from selected files in sidebar
       output$dataChoices <- renderUI({
         tagList(
           lapply(dataset(), function(file) {
@@ -69,7 +63,10 @@ heatMapServer <- function(id, dataset) {
       
       data <- reactive({
         dataList <- list()
-        colorScale <- colorRamp2(c(3, 0, -3), c("blue", "white", "red"))
+        # colours for heat map
+        colorScale <- colorRamp2(c(3, 0, -3), c("red", "white", "green"))
+        
+        # use regular expression to get gene IDs out of input
         regFilter <- regex("FBGN\\d\\d\\d\\d\\d\\d\\d", ignore_case = TRUE, )
         gene_list <- as.list(str_extract_all(input$gene_list, regFilter))[[1]]
         

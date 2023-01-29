@@ -21,7 +21,13 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
       numericInput(ns("lfcLimit"),
                    label = "Maximum log2 fold change to display",
                    value = 10,
-                   min = 1,
+                   min = 0,
+                   step = 0.01),
+      
+      numericInput(ns("pvalueLimit"),
+                   label = "Maximum p-value to display",
+                   value = 10e-12,
+                   min = 0,
                    step = 0.01),
       
       textAreaInput(ns("geneList"),
@@ -47,6 +53,7 @@ volcanoPlotServer <- function(id, dataset) {
       obs <- list()
       val <- reactiveValues()
 
+      # create checkboxes from selected files in sidebar
       output$dataChoices <- renderUI({
         tagList(
           lapply(dataset(), function(file) {
@@ -73,6 +80,7 @@ volcanoPlotServer <- function(id, dataset) {
         )
       })
       
+      # gets the selected data
       data <- reactive({
         dataList <- list()
         lapply(dataset(), function(data) {
@@ -88,14 +96,20 @@ volcanoPlotServer <- function(id, dataset) {
               df <- read.csv(paste0("./data/Uploads/", data))
             }
             
-            df[,-1] <- lapply(df[,-1], as.numeric)
-            colnames(df)[1] <- "id"
-            df <- dplyr::select(df, log2FoldChange, padj, id) %>%
-              mutate("-log10(padj)" = -log10(padj)) %>%
-              na.omit()
-            df <- mutate(df, "symbol" = get_gene_names(df))
-            
-            dataList[[paste0(data, " ", file)]] <<- df
+            # format data
+            tryCatch({
+              # convert columns to numeric because excel files save in the wrong format
+              df[,-1] <- lapply(df[,-1], as.numeric)
+              colnames(df)[1] <- "id"
+              df <- dplyr::select(df, log2FoldChange, padj, id) %>%
+                mutate("-log10(padj)" = -log10(padj)) %>%
+                na.omit()
+              df <- mutate(df, "symbol" = get_gene_names(df))
+              
+              dataList[[paste0(data, " ", file)]] <<- df
+            }, error = function(cond) {
+              print("Check if data is formatted correctly")
+            })
           }
         })
         return(dataList)
@@ -130,7 +144,17 @@ volcanoPlotServer <- function(id, dataset) {
                             pCutoff = input$pvalue,
                             FCcutoff = input$log2foldchange,
                             xlim = c(-input$lfcLimit, input$lfcLimit),
-                            selectLab = labelledGenes)
+                            ylim = c(0, -log10(input$pvalueLimit)),
+                            selectLab = labelledGenes,
+                            legendLabels = c('Not sig.','Log (base 2) FC','p-value',
+                                             'p-value & Log (base 2) FC'),
+                            legendPosition = "bottom",
+                            legendLabSize = 14,
+                            legendIconSize = 4.0,
+                            caption = paste0("Log2 fold change cutoff, ", 
+                                             input$log2foldchange, "; ", 
+                                             "p-value cutoff, ", 
+                                             input$pvalue))
           })
         })
       })
@@ -155,7 +179,11 @@ volcanoPlotServer <- function(id, dataset) {
                 yvar = "-log10(padj)",
                 maxpoints = 1
               )
-              summ <- summary(gene$id)
+              
+              # get gene summary from flybase api
+              res <- GET(paste0("https://api.flybase.org/api/v1.0/gene/summaries/auto/", gene$id))
+              summary <- fromJSON(rawToChar(res$content))
+              summary <- summary$resultset$result$summary
               
               output$geneInfo <- renderUI(
                 tagList(
@@ -173,7 +201,7 @@ volcanoPlotServer <- function(id, dataset) {
                     span(gene$padj)),
                   div(
                     span("Gene summary:", style = "font-weight: bold;"),
-                    span(summ))
+                    span(summary))
                 )
               )
             }, error = function(cond) {
@@ -186,21 +214,16 @@ volcanoPlotServer <- function(id, dataset) {
         })
       })
       
+      # create tabBox with tab for each plot
       output$plots <- renderUI ({
         do.call(tabBox, c(lapply(seq(data()), function(i) {
           tabPanel(
             title = names(data()[i]),
-            plotOutput(ns(paste0("plot", i)), 
+            plotOutput(ns(paste0("plot", i)),
+                       height = "500px",
                        click = ns(paste0("plot_click", i)))
           )
         })))
       })
-      
-      # get gene summary from flybase api
-      summary <- function(id) {
-        res <- GET(paste0("https://api.flybase.org/api/v1.0/gene/summaries/auto/", id))
-        summary <- fromJSON(rawToChar(res$content))
-        summary <- summary$resultset$result$summary
-      }
     }
 )}
