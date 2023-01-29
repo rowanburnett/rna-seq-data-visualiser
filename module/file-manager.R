@@ -1,4 +1,4 @@
-uploadUI <- function(id, label = "Upload") {
+fileManagerUI <- function(id, label = "Upload") {
   ns <- NS(id)
   
   tagList(
@@ -8,11 +8,13 @@ uploadUI <- function(id, label = "Upload") {
               placeholder = "No file selected"),
     checkboxGroupInput(ns("fileSelect"),
                 "Uploaded files",
-                choices = NULL)
+                choices = NULL),
+    actionButton(ns("deleteFiles"),
+                 "Delete selected files")
   )
 }
 
-uploadServer <- function(id) {
+fileManagerServer <- function(id) {
   moduleServer(
     id,
     
@@ -20,9 +22,9 @@ uploadServer <- function(id) {
       # increase max request size to upload files up to 100mb
       options(shiny.maxRequestSize=100*1024^2)
       
-      uploaded_files <- list.files(path = "./data/Uploads")
+      uploadedFiles <- list.files(path = "./data/Uploads")
       updateCheckboxGroupInput(session, "fileSelect", "Uploaded files",
-                        choices = uploaded_files)
+                        choices = uploadedFiles)
       
       observeEvent(input$file, {
         file <- input$file
@@ -46,9 +48,17 @@ uploadServer <- function(id) {
           }
         }
         
-        uploaded_files <- list.files("./data/Uploads/")
-        updateSelectInput(session, "fileSelect",
-                          choices = uploaded_files)
+        uploadedFiles <- list.files("./data/Uploads/")
+        updateCheckboxGroupInput(session, "fileSelect",
+                            choices = uploadedFiles)
+      })
+      
+      observeEvent(input$deleteFiles, {
+        unlink(paste0("./data/Uploads/", input$fileSelect))
+        
+        uploadedFiles <- list.files("./data/Uploads/")
+        updateCheckboxGroupInput(session, "fileSelect",
+                            choices = uploadedFiles)
       })
       
       return(

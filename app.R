@@ -17,7 +17,7 @@ library(DOSE)
 
 source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
-source("./module/upload.R", local = TRUE)
+source("./module/file-manager.R", local = TRUE)
 source("./module/gene-enrichment-analysis.R", local = TRUE)
 
 ui <- fluidPage(
@@ -32,7 +32,7 @@ ui <- fluidPage(
         menuItem("Volcano plot", tabName = "volcanoPlot"),
         menuItem("Heat map", tabName = "heatMap"),
         menuItem("Gene enrichment analysis", tabName = "geneEnrichment"),
-        uploadUI("upload")
+        fileManagerUI("fileManager")
       )
     ),
     dashboardBody(
@@ -49,10 +49,11 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-  upload <- uploadServer("upload")
-  volcano <- volcanoPlotServer("volcanoPlot", dataset = upload)
-  heatMap <- heatMapServer("heatMap", dataset = upload)
-  geneEnrichment <- geneEnrichmentServer("geneEnrichment", dataset = upload)
+  options(shiny.reactlog=TRUE) 
+  files <- fileManagerServer("fileManager")
+  volcano <- volcanoPlotServer("volcanoPlot", dataset = files)
+  heatMap <- heatMapServer("heatMap", dataset = files)
+  geneEnrichment <- geneEnrichmentServer("geneEnrichment", dataset = files)
 }
 
 
