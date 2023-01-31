@@ -1,13 +1,12 @@
 geneEnrichmentUI <- function(id, label = "Volcano plot") {
   ns <- NS(id)
     fluidPage(
-      plotOutput(ns("plots")),
+      htmlOutput(ns("plots")),
       box(
+        title = "Select data",
         htmlOutput(ns("dataChoices")),
       ),
-      box(
-        tableOutput(ns("geneTable"))
-      )
+      htmlOutput(ns("geneTable"))
     )
 }
 
@@ -73,6 +72,7 @@ geneEnrichmentServer <- function(id, dataset) {
             colnames(df)[1] <- "id"
             df <- dplyr::select(df, id, padj, log2FoldChange) %>%
               na.omit() %>%
+          #    slice_sample(n = 500) %>%
               filter(padj < 0.05)
             df <- mutate(df, "symbol" = get_gene_names(df))
             df <- column_to_rownames(df, "id")
@@ -86,41 +86,80 @@ geneEnrichmentServer <- function(id, dataset) {
                             multi_query = FALSE, evcodes = TRUE)
             
             dataList[[paste0(data, " ", file)]] <<- multiGP
+            #dataList <<- append(dataList, list(multiGP))
           }
         })
         return(dataList)
       })
       
-      
-      output$plots <- renderPlot({
-        lapply(data(), function(data) {
-          gp_mod = data$result[,c("query", "source", "term_id",
-                                     "term_name", "p_value", "query_size", 
-                                     "intersection_size", "term_size", 
-                                     "effective_domain_size", "intersection")]
-          
-          
-          gp_mod$GeneRatio <- paste0(gp_mod$intersection_size, "/", gp_mod$query_size)
-          gp_mod$BgRatio <- paste0(gp_mod$term_size, "/", gp_mod$effective_domain_size)
-          names(gp_mod) <- c("Cluster", "Category", "ID", "Description", "p.adjust", 
-                             "query_size", "Count", "term_size", "effective_domain_size", 
-                             "geneID", "GeneRatio", "BgRatio")
-          gp_mod$geneID <- gsub(",", "/", gp_mod$geneID)
-          gp_mod <- gp_mod[!duplicated(gp_mod$ID),]
-          row.names(gp_mod) <- gp_mod$ID
-          
-          
-          gp_mod_cluster <- new("compareClusterResult", compareClusterResult = gp_mod)
-          
-          enrichplot::dotplot(gp_mod_cluster, x = "Count", group = TRUE, by = "GeneRatio")
+      # render plots dynamically 
+      observe({
+        lapply(seq(data()), function(i){
+          output[[paste0("plot", i) ]] <- renderPlot({
+            data <- data()[[i]]
+            gp_mod = data$result[,c("query", "source", "term_id",
+                                    "term_name", "p_value", "query_size", 
+                                    "intersection_size", "term_size", 
+                                    "effective_domain_size", "intersection")]
+            
+            
+            gp_mod$GeneRatio <- paste0(gp_mod$intersection_size, "/", gp_mod$query_size)
+            gp_mod$BgRatio <- paste0(gp_mod$term_size, "/", gp_mod$effective_domain_size)
+            names(gp_mod) <- c("Cluster", "Category", "ID", "Description", "p.adjust", 
+                               "query_size", "Count", "term_size", "effective_domain_size", 
+                               "geneID", "GeneRatio", "BgRatio")
+            gp_mod$geneID <- gsub(",", "/", gp_mod$geneID)
+            gp_mod <- gp_mod[!duplicated(gp_mod$ID),]
+            row.names(gp_mod) <- gp_mod$ID
+            
+            
+            gp_mod_cluster <- new("compareClusterResult", compareClusterResult = gp_mod)
+            
+            enrichplot::dotplot(gp_mod_cluster, 
+                                x = "GeneRatio", 
+                                group = TRUE, 
+                                by = "Count", 
+                                includeAll = TRUE)
+
+          })
         })
       })
       
-      output$geneTable <- renderTable({
-        lapply(data(), function(data) {
-          table(data$result[,c("term_id", "p_value", "source", "term_name", "term_size", "intersection_size")])
-        })
+      # create tabBox with tab for each plot
+      output$plots <- renderUI ({
+        do.call(tabBox, c(lapply(seq(data()), function(i) {
+          tabPanel(
+            title = names(data()[i]),
+            plotOutput(ns(paste0("plot", i)),
+                       height = "500px")
+          )
+        })))
       })
       
+      # create tabBox with tab for each table
+      output$geneTable <- renderUI ({
+        do.call(tabBox, c(lapply(seq(data()), function(i) {
+          tabPanel(
+            title = names(data()[i]),
+            tableOutput(ns(paste0("table", i)))
+          )
+        })))
+      })
+      
+      # render tables dynamically
+      observe({
+        lapply(seq(data()), function(i){
+          output[[paste0("table", i) ]] <- renderTable({
+            data <- as.data.frame(data()[[i]]$result)
+            
+            data <- data[,c("term_id", "p_value", "source", "term_name", "term_size", "intersection_size")]
+            data <- data[!duplicated(data$term_id),]
+            names(data) <- c("ID", "p-value", "Source", "Term", "Term size", "Intersection")
+            print(data)
+            row.names(data) <- data$ID
+            return(data)
+          })
+        })
+      })
     }
   )}
