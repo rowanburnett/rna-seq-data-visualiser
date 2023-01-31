@@ -86,7 +86,6 @@ geneEnrichmentServer <- function(id, dataset) {
                             multi_query = FALSE, evcodes = TRUE)
             
             dataList[[paste0(data, " ", file)]] <<- multiGP
-            #dataList <<- append(dataList, list(multiGP))
           }
         })
         return(dataList)
@@ -95,6 +94,7 @@ geneEnrichmentServer <- function(id, dataset) {
       # render plots dynamically 
       observe({
         lapply(seq(data()), function(i){
+          
           output[[paste0("plot", i) ]] <- renderPlot({
             data <- data()[[i]]
             gp_mod = data$result[,c("query", "source", "term_id",
@@ -115,11 +115,23 @@ geneEnrichmentServer <- function(id, dataset) {
             
             gp_mod_cluster <- new("compareClusterResult", compareClusterResult = gp_mod)
             
-            enrichplot::dotplot(gp_mod_cluster, 
+            dotPlot <- enrichplot::dotplot(gp_mod_cluster, 
                                 x = "GeneRatio", 
                                 group = TRUE, 
                                 by = "Count", 
                                 includeAll = TRUE)
+            
+            # download current plot
+            observeEvent(input[[paste0("plotDownload", i)]], {
+              ggsave(
+                filename = paste0(names(data()[i]), ".png"),
+                plot = dotPlot,
+                device = "png",
+                path = ("./data/GSEA/Plots/")
+              )
+            })
+            
+            return(dotPlot)
 
           })
         })
@@ -127,38 +139,74 @@ geneEnrichmentServer <- function(id, dataset) {
       
       # create tabBox with tab for each plot
       output$plots <- renderUI ({
-        do.call(tabBox, c(lapply(seq(data()), function(i) {
-          tabPanel(
-            title = names(data()[i]),
-            plotOutput(ns(paste0("plot", i)),
-                       height = "500px")
-          )
-        })))
+        do.call(tabBox, 
+                c(title = "GSEA plot", 
+                  side = "right", 
+                  lapply(seq(data()), function(i) {
+                    tabPanel(
+                      title = names(data()[i]),
+                      plotOutput(ns(paste0("plot", i)),
+                                    height = "500px"),
+                                 actionButton(ns(paste0("plotDownload", i)),
+                                              "Download plot"),
+                    )
+                }))
+              )
       })
       
       # create tabBox with tab for each table
       output$geneTable <- renderUI ({
-        do.call(tabBox, c(lapply(seq(data()), function(i) {
-          tabPanel(
-            title = names(data()[i]),
-            tableOutput(ns(paste0("table", i)))
-          )
-        })))
+        do.call(tabBox, 
+                c(id = ns("tableTabs"), 
+                  title = "Results", 
+                  side = "right", 
+                  lapply(seq(data()), function(i) {
+                    tabPanel(
+                      title = names(data()[i]),
+                      actionButton(ns(paste0("tableDownload", i)),
+                                   "Download data"),
+                      tableOutput(ns(paste0("table", i)))
+                    )
+                }))
+              )
+      })
+      
+      tableData <- reactive({
+        lapply(seq(data()), function(i) {
+          data <- as.data.frame(data()[[i]]$result)
+          
+          data <- data[,c("term_id", 
+                          "p_value", 
+                          "source", 
+                          "term_name", 
+                          "term_size", 
+                          "intersection_size")]
+          
+          data <- data[!duplicated(data$term_id),]
+          names(data) <- c("ID", 
+                           "p-value", 
+                           "Source", 
+                           "Term", 
+                           "Term size", 
+                           "Intersection")
+          
+          row.names(data) <- data$ID
+          return(data)
+        })
       })
       
       # render tables dynamically
       observe({
-        lapply(seq(data()), function(i){
-          output[[paste0("table", i) ]] <- renderTable({
-            data <- as.data.frame(data()[[i]]$result)
-            
-            data <- data[,c("term_id", "p_value", "source", "term_name", "term_size", "intersection_size")]
-            data <- data[!duplicated(data$term_id),]
-            names(data) <- c("ID", "p-value", "Source", "Term", "Term size", "Intersection")
+        lapply(seq(tableData()), function(i){
+          data <- tableData()[[i]]
+          # download current dataset
+          observeEvent(input[[paste0("tableDownload", i)]], {
             print(data)
-            row.names(data) <- data$ID
-            return(data)
+            print(input$tableTabs)
+            write.csv(data, paste0("./data/GSEA/Data/", input$tableTabs), row.names = FALSE)
           })
+          
+          output[[paste0("table", i) ]] <- renderTable(data)
         })
       })
     }
