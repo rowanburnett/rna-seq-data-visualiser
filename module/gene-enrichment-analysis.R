@@ -5,6 +5,21 @@ geneEnrichmentUI <- function(id, label = "Volcano plot") {
       box(
         title = "Select data",
         htmlOutput(ns("dataChoices")),
+        wellPanel(
+          "Significance cutoff values",
+          
+          numericInput(ns("pvalue"),
+                       label = "p-value",
+                       value = 0.05,
+                       min = 0,
+                       step = 0.01),
+          
+          numericInput(ns("log2foldchange"),
+                       label = "Log2 fold change",
+                       value = 1.4,
+                       min = 0,
+                       step = 0.01)
+        ),
       ),
       htmlOutput(ns("geneTable"))
     )
@@ -68,24 +83,32 @@ geneEnrichmentServer <- function(id, dataset) {
               df <- read.csv(paste0("./data/Uploads/", data))
             }
             
-            df[,-1] <- lapply(df[,-1], as.numeric)
-            colnames(df)[1] <- "id"
-            df <- dplyr::select(df, id, padj, log2FoldChange) %>%
-              na.omit() %>%
-          #    slice_sample(n = 500) %>%
-              filter(padj < 0.05)
-            df <- mutate(df, "symbol" = get_gene_names(df))
-            df <- column_to_rownames(df, "id")
-
-            downregulatedGenes <- filter(df, log2FoldChange < -1.4)
-            upregulatedGenes <- filter(df, log2FoldChange > 1.4)
-            
-            multiGP <- gost(query = list("Upregulated" = rownames(upregulatedGenes), 
-                                         "Downregulated" = rownames(downregulatedGenes)), 
-                            organism = "dmelanogaster",
-                            multi_query = FALSE, evcodes = TRUE)
-            
-            dataList[[paste0(data, " ", file)]] <<- multiGP
+            tryCatch({
+              df[,-1] <- lapply(df[,-1], as.numeric)
+              colnames(df)[1] <- "id"
+              df <- dplyr::select(df, id, padj, log2FoldChange) %>%
+                na.omit() %>%
+                filter(padj < input$pvalue)
+              
+              df <- mutate(df, "symbol" = get_gene_names(df))
+              df <- column_to_rownames(df, "id")
+  
+              downregulatedGenes <- filter(df, log2FoldChange < -input$log2foldchange)
+              upregulatedGenes <- filter(df, log2FoldChange > input$log2foldchange)
+              
+              gostres <- gost(query = list("Upregulated" = rownames(upregulatedGenes), 
+                                           "Downregulated" = rownames(downregulatedGenes)), 
+                              organism = "dmelanogaster",
+                              multi_query = FALSE, evcodes = TRUE)
+              
+              dataList[[paste0(tools::file_path_sans_ext(data), " ", file)]] <<- gostres
+            }, error = function(cond) {
+              showModal(modalDialog(
+                title = "Incorrect format",
+                "Please check that data is formatted correctly",
+                easyClose = TRUE
+              ))
+            })
           }
         })
         return(dataList)
@@ -115,16 +138,15 @@ geneEnrichmentServer <- function(id, dataset) {
             
             gp_mod_cluster <- new("compareClusterResult", compareClusterResult = gp_mod)
             
-            dotPlot <- enrichplot::dotplot(gp_mod_cluster, 
-                                x = "GeneRatio", 
-                                group = TRUE, 
-                                by = "Count", 
-                                includeAll = TRUE)
+            dotPlot <- enrichplot::dotplot(gp_mod_cluster, by = "Count")
             
             # download current plot
             observeEvent(input[[paste0("plotDownload", i)]], {
+              fileName <- paste0(input[[paste0("plotFileName", i)]])
+              fileExtension <- paste0(input[[paste0("plotExtension", i)]])
+              
               ggsave(
-                filename = paste0(names(data()[i]), ".png"),
+                filename = paste0(fileName, fileExtension),
                 plot = dotPlot,
                 device = "png",
                 path = ("./data/GSEA/Plots/")
@@ -140,15 +162,20 @@ geneEnrichmentServer <- function(id, dataset) {
       # create tabBox with tab for each plot
       output$plots <- renderUI ({
         do.call(tabBox, 
-                c(title = "GSEA plot", 
+                c(title = "GSEA dot plot", 
                   side = "right", 
                   lapply(seq(data()), function(i) {
                     tabPanel(
                       title = names(data()[i]),
                       plotOutput(ns(paste0("plot", i)),
                                     height = "500px"),
-                                 actionButton(ns(paste0("plotDownload", i)),
-                                              "Download plot"),
+                      textInput(ns(paste0("plotFileName", i)),
+                                "File name"),
+                      selectInput(ns(paste0("plotExtension", i)),
+                                  "File extension",
+                                  choices = c(".png", ".jpeg", "bpm", ".pdf")),
+                       actionButton(ns(paste0("plotDownload", i)),
+                                    "Download plot")
                     )
                 }))
               )
@@ -163,6 +190,8 @@ geneEnrichmentServer <- function(id, dataset) {
                   lapply(seq(data()), function(i) {
                     tabPanel(
                       title = names(data()[i]),
+                      textInput(ns(paste0("tableFileName", i)),
+                                "File name"),
                       actionButton(ns(paste0("tableDownload", i)),
                                    "Download data"),
                       tableOutput(ns(paste0("table", i)))
@@ -199,11 +228,12 @@ geneEnrichmentServer <- function(id, dataset) {
       observe({
         lapply(seq(tableData()), function(i){
           data <- tableData()[[i]]
+          
           # download current dataset
           observeEvent(input[[paste0("tableDownload", i)]], {
-            print(data)
-            print(input$tableTabs)
-            write.csv(data, paste0("./data/GSEA/Data/", input$tableTabs), row.names = FALSE)
+            fileName <- paste0(input[[paste0("tableFileName", i)]])
+            
+            write.csv(data, paste0("./data/GSEA/Data/", paste0(fileName, ".csv")), row.names = FALSE)
           })
           
           output[[paste0("table", i) ]] <- renderTable(data)

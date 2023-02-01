@@ -6,17 +6,21 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
     box(
       htmlOutput(ns("dataChoices")),
   
-      numericInput(ns("pvalue"),
-                   label = "p-value",
-                   value = 0.05,
-                   min = 0,
-                   step = 0.01),
-      
-      numericInput(ns("log2foldchange"),
-                   label = "Log2 fold change",
-                   value = 1.4,
-                   min = 0,
-                   step = 0.01),
+      wellPanel(
+        "Significance cutoff values",
+        
+        numericInput(ns("pvalue"),
+                     label = "p-value",
+                     value = 0.05,
+                     min = 0,
+                     step = 0.01),
+        
+        numericInput(ns("log2foldchange"),
+                     label = "Log2 fold change",
+                     value = 1.4,
+                     min = 0,
+                     step = 0.01)
+      ),
       
       numericInput(ns("lfcLimit"),
                    label = "Maximum log2 fold change to display",
@@ -25,7 +29,7 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
                    step = 0.01),
       
       numericInput(ns("pvalueLimit"),
-                   label = "Maximum p-value to display",
+                   label = "Smallest p-value to display",
                    value = 10e-12,
                    min = 0,
                    step = 0.01),
@@ -108,7 +112,11 @@ volcanoPlotServer <- function(id, dataset) {
               
               dataList[[paste0(data, " ", file)]] <<- df
             }, error = function(cond) {
-              print("Check if data is formatted correctly")
+              showModal(modalDialog(
+                title = "Incorrect format",
+                "Please check that data is formatted correctly",
+                easyClose = TRUE
+              ))
             })
           }
         })
@@ -140,7 +148,7 @@ volcanoPlotServer <- function(id, dataset) {
             }
             
             # draw volcano plot
-            EnhancedVolcano(data, lab = data$symbol, x = "log2FoldChange", y = "padj",
+            volcanoPlot <- EnhancedVolcano(data, lab = data$symbol, x = "log2FoldChange", y = "padj",
                             pCutoff = input$pvalue,
                             FCcutoff = input$log2foldchange,
                             xlim = c(-input$lfcLimit, input$lfcLimit),
@@ -155,6 +163,28 @@ volcanoPlotServer <- function(id, dataset) {
                                              input$log2foldchange, "; ", 
                                              "p-value cutoff, ", 
                                              input$pvalue))
+            
+            # download current plot
+            observeEvent(input[[paste0("plotDownload", i)]], {
+              fileName <- paste0(input[[paste0("plotFileName", i)]])
+              fileExtension <- paste0(input[[paste0("plotExtension", i)]])
+                                 
+              tryCatch({
+                ggsave(
+                  filename = paste0(fileName, fileExtension),
+                  plot = volcanoPlot,
+                  path = ("./data/Volcano/Plots/")
+                )
+              }, error = function(cond) {
+                showModal(modalDialog(
+                  title = "Save error",
+                  "Please check that the file path is correct",
+                  easyClose = TRUE
+                ))
+              })
+            })
+            
+            return(volcanoPlot)
           })
         })
       })
@@ -216,14 +246,25 @@ volcanoPlotServer <- function(id, dataset) {
       
       # create tabBox with tab for each plot
       output$plots <- renderUI ({
-        do.call(tabBox, c(lapply(seq(data()), function(i) {
-          tabPanel(
-            title = names(data()[i]),
-            plotOutput(ns(paste0("plot", i)),
-                       height = "500px",
-                       click = ns(paste0("plot_click", i)))
-          )
-        })))
+        do.call(tabBox, 
+                c(title = "Volcano plot", 
+                  side = "right", 
+                  lapply(seq(data()), function(i) {
+                    tabPanel(
+                      title = names(data()[i]),
+                      plotOutput(ns(paste0("plot", i)),
+                                 height = "500px",
+                                 click = ns(paste0("plot_click", i))),
+                      textInput(ns(paste0("plotFileName", i)),
+                                "File name"),
+                      selectInput(ns(paste0("plotExtension", i)),
+                                  "File extension",
+                                  choices = c(".png", ".jpeg", "bpm", ".pdf")),
+                      actionButton(ns(paste0("plotDownload", i)),
+                                   "Download plot")
+                    )
+                }))
+              )
       })
     }
 )}
