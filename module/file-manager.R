@@ -37,7 +37,6 @@ fileManagerServer <- function(id) {
           newFile <- read.csv(file$datapath)
           write.csv(newFile, file = paste0("./data/Uploads/", file$name), row.names = FALSE)
           
-          # currently only writes one sheet for workbooks
         } else if (ext == "xlsx" || ext == "xls") { 
           dataframes <- list()
           sheets <- excel_sheets(file$datapath)

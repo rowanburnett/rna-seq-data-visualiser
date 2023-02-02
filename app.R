@@ -19,19 +19,20 @@ source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
 source("./module/file-manager.R", local = TRUE)
 source("./module/gene-enrichment-analysis.R", local = TRUE)
+source("./function/generate-ui.R")
 
 ui <- fluidPage(
   dashboardPage(
     dashboardHeader(
       title = "RNA-seq data visualisation",
-      titleWidth = "300px"
+      titleWidth = "280px"
       ),
     dashboardSidebar(
-      width = "300px",
+      width = "280px",
       sidebarMenu(
         menuItem("Volcano plot", tabName = "volcanoPlot"),
         menuItem("Heat map", tabName = "heatMap"),
-        menuItem("Gene enrichment analysis", tabName = "geneEnrichment"),
+        menuItem("Gene set enrichment analysis (GSEA)", tabName = "geneEnrichment"),
         fileManagerUI("fileManager")
       )
     ),
@@ -42,19 +43,18 @@ ui <- fluidPage(
         tabItem(tabName = "heatMap",
                 heatMapUI("heatMap")),
         tabItem(tabName = "geneEnrichment",
-                geneEnrichmentUI("geneEnrichment")),
+                geneEnrichmentUI("geneEnrichment"))
       )
     )
   )
 )
 
 server <- function(input, output, session) {
-  options(shiny.reactlog=TRUE) 
+  options(shiny.reactlog=TRUE)
   files <- fileManagerServer("fileManager")
   volcano <- volcanoPlotServer("volcanoPlot", dataset = files)
   heatMap <- heatMapServer("heatMap", dataset = files)
   geneEnrichment <- geneEnrichmentServer("geneEnrichment", dataset = files)
 }
-
 
 shinyApp(ui = ui, server = server)

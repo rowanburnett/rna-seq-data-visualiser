@@ -59,29 +59,7 @@ volcanoPlotServer <- function(id, dataset) {
 
       # create checkboxes from selected files in sidebar
       output$dataChoices <- renderUI({
-        tagList(
-          lapply(dataset(), function(file) {
-            ext <- tools::file_ext(file)
-            
-            if (ext == "csv") {
-              checkboxGroupInput(ns(file), 
-                                 tools::file_path_sans_ext(file), 
-                                 choices = file)
-              
-            } else if (ext == "xls" || ext == "xlsx") {
-              sheets <- excel_sheets(paste0("./data/Uploads/", file))
-              choices <- c()
-              
-              for (sheet in sheets) {
-                choices <- append(choices, sheet)
-              }
-              
-              checkboxGroupInput(ns(file), 
-                                 tools::file_path_sans_ext(file), 
-                                 choices = choices)
-            }
-          })
-        )
+        generateCheckboxes(dataset(), ns)
       })
       
       # gets the selected data
@@ -165,24 +143,9 @@ volcanoPlotServer <- function(id, dataset) {
                                              input$pvalue))
             
             # download current plot
-            observeEvent(input[[paste0("plotDownload", i)]], {
-              fileName <- paste0(input[[paste0("plotFileName", i)]])
-              fileExtension <- paste0(input[[paste0("plotExtension", i)]])
-                                 
-              tryCatch({
-                ggsave(
-                  filename = paste0(fileName, fileExtension),
-                  plot = volcanoPlot,
-                  path = ("./data/Volcano/Plots/")
-                )
-              }, error = function(cond) {
-                showModal(modalDialog(
-                  title = "Save error",
-                  "Please check that the file path is correct",
-                  easyClose = TRUE
-                ))
-              })
-            })
+            output[[paste0("plotDownload", i)]] <- generatePlotDownload(input[[paste0("plotFileName", i)]], 
+                                                                        input[[paste0("plotExtension", i)]],
+                                                                        volcanoPlot)
             
             return(volcanoPlot)
           })
@@ -247,24 +210,24 @@ volcanoPlotServer <- function(id, dataset) {
       # create tabBox with tab for each plot
       output$plots <- renderUI ({
         do.call(tabBox, 
-                c(title = "Volcano plot", 
-                  side = "right", 
-                  lapply(seq(data()), function(i) {
-                    tabPanel(
-                      title = names(data()[i]),
-                      plotOutput(ns(paste0("plot", i)),
-                                 height = "500px",
-                                 click = ns(paste0("plot_click", i))),
-                      textInput(ns(paste0("plotFileName", i)),
-                                "File name"),
-                      selectInput(ns(paste0("plotExtension", i)),
-                                  "File extension",
-                                  choices = c(".png", ".jpeg", "bpm", ".pdf")),
-                      actionButton(ns(paste0("plotDownload", i)),
-                                   "Download plot")
-                    )
-                }))
+          c(title = "Volcano plot", 
+            side = "right", 
+            lapply(seq(data()), function(i) {
+              tabPanel(
+                title = names(data()[i]),
+                plotOutput(ns(paste0("plot", i)),
+                           height = "500px",
+                           click = ns(paste0("plot_click", i))),
+                textInput(ns(paste0("plotFileName", i)),
+                          "File name"),
+                selectInput(ns(paste0("plotExtension", i)),
+                            "File extension",
+                            choices = c(".png", ".jpeg", "bpm", ".pdf")),
+                downloadButton(ns(paste0("plotDownload", i)),
+                             "Download plot")
               )
+          }))
+        )
       })
     }
 )}

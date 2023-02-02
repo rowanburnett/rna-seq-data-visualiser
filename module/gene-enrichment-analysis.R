@@ -19,16 +19,16 @@ geneEnrichmentUI <- function(id, label = "Volcano plot") {
                        value = 1.4,
                        min = 0,
                        step = 0.01)
-        ),
-        box(
-          title = "Convert GO term IDs to FlyBase gene IDs",
-          textAreaInput(ns("convertGOInput"),
-                    "Enter GO term IDs"),
-          textInput(ns("convertGOFileName"),
-                    "File name"),
-          actionButton(ns("convertGOButton"),
-                       "Download results")
         )
+      ),
+      box(
+        title = "Convert GO term IDs to FlyBase gene IDs",
+        textAreaInput(ns("convertGOInput"),
+                      "Enter GO term IDs"),
+        textInput(ns("convertGOFileName"),
+                  "File name"),
+        downloadButton(ns("convertGOButton"),
+                     "Download results")
       ),
       htmlOutput(ns("geneTable"))
     )
@@ -44,39 +44,9 @@ geneEnrichmentServer <- function(id, dataset) {
       
       # create checkboxes from selected files in sidebar
       output$dataChoices <- renderUI({
-        tagList(
-          lapply(dataset(), function(file) {
-            ext <- tools::file_ext(file)
-            
-            if (ext == "csv") {
-              checkboxGroupInput(ns(file), 
-                                 tools::file_path_sans_ext(file), 
-                                 choices = file)
-              
-            } else if (ext == "xls" || ext == "xlsx") {
-              sheets <- excel_sheets(paste0("./data/Uploads/", file))
-              choices <- c()
-              
-              for (sheet in sheets) {
-                choices <- append(choices, sheet)
-              }
-              
-              checkboxGroupInput(ns(file), 
-                                 tools::file_path_sans_ext(file), 
-                                 choices = choices)
-            }
-          })
-        )
+        generateCheckboxes(dataset(), ns)
       })
-      
-      # get gene symbols from gene ids
-      get_gene_names <- function(df) {
-        symbols <- mapIds(org.Dm.eg.db, 
-                          keys = df$id, 
-                          keytype = "FLYBASE", 
-                          column = "SYMBOL")
-      }
-      
+
       # gets the selected data
       data <- reactive({
         dataList <- list()
@@ -99,7 +69,6 @@ geneEnrichmentServer <- function(id, dataset) {
                 na.omit() %>%
                 filter(padj < input$pvalue)
               
-              df <- mutate(df, "symbol" = get_gene_names(df))
               df <- column_to_rownames(df, "id")
   
               downregulatedGenes <- filter(df, log2FoldChange < -input$log2foldchange)
@@ -128,42 +97,34 @@ geneEnrichmentServer <- function(id, dataset) {
         lapply(seq(data()), function(i){
           
           output[[paste0("plot", i) ]] <- renderPlot({
-            data <- data()[[i]]
-            gp_mod = data$result[,c("query", "source", "term_id",
+            gostres <- data()[[i]]
+            gostres <- gostres$result[,c("query", "source", "term_id",
                                     "term_name", "p_value", "query_size", 
                                     "intersection_size", "term_size", 
                                     "effective_domain_size", "intersection")]
             
+            gostres$GeneRatio <- paste0(gostres$intersection_size, "/", gostres$query_size)
+            gostres$BgRatio <- paste0(gostres$term_size, "/", gostres$effective_domain_size)
             
-            gp_mod$GeneRatio <- paste0(gp_mod$intersection_size, "/", gp_mod$query_size)
-            gp_mod$BgRatio <- paste0(gp_mod$term_size, "/", gp_mod$effective_domain_size)
-            names(gp_mod) <- c("Cluster", "Category", "ID", "Description", "p.adjust", 
+            names(gostres) <- c("Cluster", "Category", "ID", "Description", "p.adjust", 
                                "query_size", "Count", "term_size", "effective_domain_size", 
                                "geneID", "GeneRatio", "BgRatio")
-            gp_mod$geneID <- gsub(",", "/", gp_mod$geneID)
-            gp_mod <- gp_mod[!duplicated(gp_mod$ID),]
-            row.names(gp_mod) <- gp_mod$ID
+            
+            gostres$geneID <- gsub(",", "/", gostres$geneID)
+            gostres <- gostres[!duplicated(gostres$ID),]
+            row.names(gostres) <- gostres$ID
             
             
-            gp_mod_cluster <- new("compareClusterResult", compareClusterResult = gp_mod)
+            gostresCluster <- new("compareClusterResult", compareClusterResult = gostres)
             
-            dotPlot <- enrichplot::dotplot(gp_mod_cluster, by = "Count")
+            dotPlot <- enrichplot::dotplot(gostresCluster, by = "Count")
             
             # download current plot
-            observeEvent(input[[paste0("plotDownload", i)]], {
-              fileName <- paste0(input[[paste0("plotFileName", i)]])
-              fileExtension <- paste0(input[[paste0("plotExtension", i)]])
-              
-              ggsave(
-                filename = paste0(fileName, fileExtension),
-                plot = dotPlot,
-                device = "png",
-                path = ("./data/GSEA/Plots/")
-              )
-            })
+            output[[paste0("plotDownload", i)]] <- generatePlotDownload(input[[paste0("plotFileName", i)]], 
+                                                                        input[[paste0("plotExtension", i)]],
+                                                                        dotPlot)
             
             return(dotPlot)
-
           })
         })
       })
@@ -171,42 +132,41 @@ geneEnrichmentServer <- function(id, dataset) {
       # create tabBox with tab for each plot
       output$plots <- renderUI ({
         do.call(tabBox, 
-                c(title = "GSEA dot plot", 
-                  side = "right", 
-                  lapply(seq(data()), function(i) {
-                    tabPanel(
-                      title = names(data()[i]),
-                      plotOutput(ns(paste0("plot", i)),
-                                    height = "500px"),
-                      textInput(ns(paste0("plotFileName", i)),
-                                "File name"),
-                      selectInput(ns(paste0("plotExtension", i)),
-                                  "File extension",
-                                  choices = c(".png", ".jpeg", "bpm", ".pdf")),
-                       actionButton(ns(paste0("plotDownload", i)),
-                                    "Download plot")
-                    )
-                }))
+          c(title = "GSEA dot plot", 
+            side = "right", 
+            lapply(seq(data()), function(i) {
+              tabPanel(
+                title = names(data()[i]),
+                plotOutput(ns(paste0("plot", i)),
+                              height = "500px"),
+                textInput(ns(paste0("plotFileName", i)),
+                          "File name"),
+                selectInput(ns(paste0("plotExtension", i)),
+                            "File extension",
+                            choices = c(".png", ".jpeg", ".bpm", ".pdf")),
+                downloadButton(ns(paste0("plotDownload", i)),
+                            "Download plot")
               )
+          }))
+        )
       })
       
       # create tabBox with tab for each table
       output$geneTable <- renderUI ({
         do.call(tabBox, 
-                c(id = ns("tableTabs"), 
-                  title = "Results", 
-                  side = "right", 
-                  lapply(seq(data()), function(i) {
-                    tabPanel(
-                      title = names(data()[i]),
-                      textInput(ns(paste0("tableFileName", i)),
-                                "File name"),
-                      actionButton(ns(paste0("tableDownload", i)),
-                                   "Download data"),
-                      tableOutput(ns(paste0("table", i)))
-                    )
-                }))
+          c(title = "Results", 
+            side = "right", 
+            lapply(seq(data()), function(i) {
+              tabPanel(
+                title = names(data()[i]),
+                textInput(ns(paste0("tableFileName", i)),
+                          "File name"),
+                downloadButton(ns(paste0("tableDownload", i)),
+                             "Download data"),
+                tableOutput(ns(paste0("table", i)))
               )
+          }))
+        )
       })
       
       tableData <- reactive({
@@ -239,44 +199,48 @@ geneEnrichmentServer <- function(id, dataset) {
           data <- tableData()[[i]]
           
           # download current dataset
-          observeEvent(input[[paste0("tableDownload", i)]], {
-            fileName <- paste0(input[[paste0("tableFileName", i)]])
+          output[[paste0("tableDownload", i)]] <- downloadHandler(
+            file = function() {
+              paste0(input[[paste0("tableFileName", i)]], ".csv")
+            },
             
-            write.csv(data, file = paste0("./data/GSEA/Data/", fileName, ".csv"), row.names = FALSE)
-          })
-          
+            content = function(file) {
+              write.csv(data, file, row.names = FALSE)
+            }
+          )
+        
           output[[paste0("table", i) ]] <- renderTable(data)
         })
       })
       
       # convert GO term IDs to flybase gene IDs
-      observeEvent(input$convertGOButton, {
-        fileName <- input$convertGOFileName
-        
-        tryCatch({
-        # use regex to match all inputted terms
-          termsToConvert <- str_extract_all(input$convertGOInput, ".+(?=[:space:]+)")[[1]]
-          conversion <- gconvert(termsToConvert, organism = "dmelanogaster")
-          conversion <- dplyr::select(conversion, -input_number, -namespace)
-          names(conversion) <- c("TermID", "TargetNumber", "GeneID", "Name", "Description")
-        }, error = function(cond) {
-          showModal(modalDialog(
-            title = "No results",
-            "Please check that GO term IDs were entered correctly",
-            easyClose = TRUE
-          ))
-        })
-        
-        tryCatch({
-          write.csv(conversion, file = paste0("./data/GSEA/Data/", fileName, ".csv"), row.names = FALSE)
-        }, error = function(cond) {
-          showModal(modalDialog(
-            title = "Error saving file",
-            "File path may be incorrect or a file with the same name may already be open",
-            easyClose = TRUE
-          ))
-        })
-      })
-      
+      output$convertGOButton <- downloadHandler(
+        filename = function() {
+          paste0(input$convertGOFileName, ".csv")
+        },
+          
+        content = function(file) {
+          tryCatch({
+          # use regex to match all inputted terms
+            termsToConvert <- str_extract_all(input$convertGOInput, ".+(?=[:space:]+)")[[1]]
+            
+            # use gconvert to get gene IDs
+            conversion <- gconvert(termsToConvert, organism = "dmelanogaster")
+            
+            conversion <- dplyr::select(conversion, -input_number, -namespace)
+            names(conversion) <- c("TermID", "TargetNumber", "GeneID", "Name", "Description")
+            conversion <- conversion[!duplicated(conversion$GeneID),]
+            
+            write.csv(conversion, file, row.names = FALSE)
+            
+          }, error = function(cond) {
+            showModal(modalDialog(
+              title = "No results",
+              "Please check that GO term IDs were entered correctly",
+              easyClose = TRUE
+            ))
+          })
+        }
+      )
     }
   )}
