@@ -20,6 +20,15 @@ geneEnrichmentUI <- function(id, label = "Volcano plot") {
                        min = 0,
                        step = 0.01)
         ),
+        box(
+          title = "Convert GO term IDs to FlyBase gene IDs",
+          textAreaInput(ns("convertGOInput"),
+                    "Enter GO term IDs"),
+          textInput(ns("convertGOFileName"),
+                    "File name"),
+          actionButton(ns("convertGOButton"),
+                       "Download results")
+        )
       ),
       htmlOutput(ns("geneTable"))
     )
@@ -233,11 +242,41 @@ geneEnrichmentServer <- function(id, dataset) {
           observeEvent(input[[paste0("tableDownload", i)]], {
             fileName <- paste0(input[[paste0("tableFileName", i)]])
             
-            write.csv(data, paste0("./data/GSEA/Data/", paste0(fileName, ".csv")), row.names = FALSE)
+            write.csv(data, file = paste0("./data/GSEA/Data/", fileName, ".csv"), row.names = FALSE)
           })
           
           output[[paste0("table", i) ]] <- renderTable(data)
         })
       })
+      
+      # convert GO term IDs to flybase gene IDs
+      observeEvent(input$convertGOButton, {
+        fileName <- input$convertGOFileName
+        
+        tryCatch({
+        # use regex to match all inputted terms
+          termsToConvert <- str_extract_all(input$convertGOInput, ".+(?=[:space:]+)")[[1]]
+          conversion <- gconvert(termsToConvert, organism = "dmelanogaster")
+          conversion <- dplyr::select(conversion, -input_number, -namespace)
+          names(conversion) <- c("TermID", "TargetNumber", "GeneID", "Name", "Description")
+        }, error = function(cond) {
+          showModal(modalDialog(
+            title = "No results",
+            "Please check that GO term IDs were entered correctly",
+            easyClose = TRUE
+          ))
+        })
+        
+        tryCatch({
+          write.csv(conversion, file = paste0("./data/GSEA/Data/", fileName, ".csv"), row.names = FALSE)
+        }, error = function(cond) {
+          showModal(modalDialog(
+            title = "Error saving file",
+            "File path may be incorrect or a file with the same name may already be open",
+            easyClose = TRUE
+          ))
+        })
+      })
+      
     }
   )}
