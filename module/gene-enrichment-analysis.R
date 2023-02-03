@@ -56,7 +56,10 @@ geneEnrichmentServer <- function(id, dataset) {
             
             df <- data.frame()
             if (ext == "xls" || ext == "xlsx") {
-              df <- read_excel(paste0("./data/Uploads/", data), file, na = "na")
+              df <- read_excel(paste0("./data/Uploads/", data), 
+                               file, 
+                               na = "na",
+                               .name_repair = "minimal")
               
             } else if (ext == "csv") {
               df <- read.csv(paste0("./data/Uploads/", data))
@@ -79,6 +82,21 @@ geneEnrichmentServer <- function(id, dataset) {
                               organism = "dmelanogaster",
                               multi_query = FALSE, evcodes = TRUE)
               
+              gostres <- gostres$result[,c("query", "source", "term_id",
+                                           "term_name", "p_value", "query_size", 
+                                           "intersection_size", "term_size", 
+                                           "effective_domain_size", "intersection")]
+              
+              gostres$GeneRatio <- paste0(gostres$intersection_size, "/", gostres$query_size)
+              gostres$BgRatio <- paste0(gostres$term_size, "/", gostres$effective_domain_size)
+              
+              names(gostres) <- c("Cluster", "Category", "ID", "Description", "p.adjust", 
+                                  "query_size", "Count", "term_size", "effective_domain_size", 
+                                  "geneID", "GeneRatio", "BgRatio")
+              
+              gostres$geneID <- gsub(",", "/", gostres$geneID)
+              gostres <- gostres[!duplicated(gostres$ID),]
+              
               dataList[[paste0(tools::file_path_sans_ext(data), " ", file)]] <<- gostres
             }, error = function(cond) {
               showModal(modalDialog(
@@ -98,22 +116,7 @@ geneEnrichmentServer <- function(id, dataset) {
           
           output[[paste0("plot", i) ]] <- renderPlot({
             gostres <- data()[[i]]
-            gostres <- gostres$result[,c("query", "source", "term_id",
-                                    "term_name", "p_value", "query_size", 
-                                    "intersection_size", "term_size", 
-                                    "effective_domain_size", "intersection")]
-            
-            gostres$GeneRatio <- paste0(gostres$intersection_size, "/", gostres$query_size)
-            gostres$BgRatio <- paste0(gostres$term_size, "/", gostres$effective_domain_size)
-            
-            names(gostres) <- c("Cluster", "Category", "ID", "Description", "p.adjust", 
-                               "query_size", "Count", "term_size", "effective_domain_size", 
-                               "geneID", "GeneRatio", "BgRatio")
-            
-            gostres$geneID <- gsub(",", "/", gostres$geneID)
-            gostres <- gostres[!duplicated(gostres$ID),]
             row.names(gostres) <- gostres$ID
-            
             
             gostresCluster <- new("compareClusterResult", compareClusterResult = gostres)
             
@@ -131,24 +134,7 @@ geneEnrichmentServer <- function(id, dataset) {
       
       # create tabBox with tab for each plot
       output$plots <- renderUI ({
-        do.call(tabBox, 
-          c(title = "GSEA dot plot", 
-            side = "right", 
-            lapply(seq(data()), function(i) {
-              tabPanel(
-                title = names(data()[i]),
-                plotOutput(ns(paste0("plot", i)),
-                              height = "500px"),
-                textInput(ns(paste0("plotFileName", i)),
-                          "File name"),
-                selectInput(ns(paste0("plotExtension", i)),
-                            "File extension",
-                            choices = c(".png", ".jpeg", ".bpm", ".pdf")),
-                downloadButton(ns(paste0("plotDownload", i)),
-                            "Download plot")
-              )
-          }))
-        )
+        generatePlotTabs(data(), "GSEA dot plot", ns)
       })
       
       # create tabBox with tab for each table
@@ -169,34 +155,10 @@ geneEnrichmentServer <- function(id, dataset) {
         )
       })
       
-      tableData <- reactive({
-        lapply(seq(data()), function(i) {
-          data <- as.data.frame(data()[[i]]$result)
-          
-          data <- data[,c("term_id", 
-                          "p_value", 
-                          "source", 
-                          "term_name", 
-                          "term_size", 
-                          "intersection_size")]
-          
-          data <- data[!duplicated(data$term_id),]
-          names(data) <- c("ID", 
-                           "p-value", 
-                           "Source", 
-                           "Term", 
-                           "Term size", 
-                           "Intersection")
-          
-          row.names(data) <- data$ID
-          return(data)
-        })
-      })
-      
       # render tables dynamically
       observe({
-        lapply(seq(tableData()), function(i){
-          data <- tableData()[[i]]
+        lapply(seq(data()), function(i){
+          data <- data()[[i]]
           
           # download current dataset
           output[[paste0("tableDownload", i)]] <- downloadHandler(

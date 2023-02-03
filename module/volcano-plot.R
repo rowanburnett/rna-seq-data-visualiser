@@ -72,7 +72,10 @@ volcanoPlotServer <- function(id, dataset) {
             df <- data.frame()
             # different read functions depending on file format
             if (ext == "xls" || ext == "xlsx") {
-              df <- read_excel(paste0("./data/Uploads/", data), file, na = "na")
+              df <- read_excel(paste0("./data/Uploads/", data), 
+                               file, 
+                               na = "na",
+                               .name_repair = "minimal")
               
             } else if (ext == "csv") {
               df <- read.csv(paste0("./data/Uploads/", data))
@@ -89,6 +92,7 @@ volcanoPlotServer <- function(id, dataset) {
               df <- mutate(df, "symbol" = get_gene_names(df))
               
               dataList[[paste0(data, " ", file)]] <<- df
+              
             }, error = function(cond) {
               showModal(modalDialog(
                 title = "Incorrect format",
@@ -155,7 +159,7 @@ volcanoPlotServer <- function(id, dataset) {
       # extra gene information
       observe({
         lapply(seq(data()), function(i){
-          id <- paste0("plot_click",i)
+          id <- paste0("plotClick", i)
           
           # necessary to allow clicking multiple plots correctly
           if (!is.null(obs[[id]])) {
@@ -167,7 +171,7 @@ volcanoPlotServer <- function(id, dataset) {
             tryCatch({
               gene <- nearPoints(
                 data[[i]], 
-                input[[paste0("plot_click", i)]],
+                input[[paste0("plotClick", i)]],
                 xvar = "log2FoldChange",
                 yvar = "-log10(padj)",
                 maxpoints = 1
@@ -209,25 +213,7 @@ volcanoPlotServer <- function(id, dataset) {
       
       # create tabBox with tab for each plot
       output$plots <- renderUI ({
-        do.call(tabBox, 
-          c(title = "Volcano plot", 
-            side = "right", 
-            lapply(seq(data()), function(i) {
-              tabPanel(
-                title = names(data()[i]),
-                plotOutput(ns(paste0("plot", i)),
-                           height = "500px",
-                           click = ns(paste0("plot_click", i))),
-                textInput(ns(paste0("plotFileName", i)),
-                          "File name"),
-                selectInput(ns(paste0("plotExtension", i)),
-                            "File extension",
-                            choices = c(".png", ".jpeg", "bpm", ".pdf")),
-                downloadButton(ns(paste0("plotDownload", i)),
-                             "Download plot")
-              )
-          }))
-        )
+        generatePlotTabs(data(), "Volcano plot", ns)
       })
     }
 )}
