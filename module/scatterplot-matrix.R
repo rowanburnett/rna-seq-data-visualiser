@@ -12,7 +12,9 @@ scatterplotUI <- function(id, label = "Scatterplot matrix") {
     ),
     
     box(
-      htmlOutput(ns("dataChoices"))
+      htmlOutput(ns("dataChoices")),
+      checkboxGroupInput(ns("sampleChoices"),
+                         "Samples")
     ),
     
     box(
@@ -32,11 +34,11 @@ scatterplotServer <- function(id, dataset) {
       
       # create checkboxes from selected files in sidebar
       output$dataChoices <- renderUI({
-        generateCheckboxes(dataset(), ns)
+        generateRadioButtons(dataset(), ns)
       })
       
       # adds numbers to replicate column names
-      make_unique = function(x, sep='.'){
+      makeUnique = function(x, sep='.'){
         ave(x, x, FUN=function(a){if(length(a) > 1){paste(a, 1:length(a), sep=sep)} else {a}})
       }
 
@@ -67,49 +69,54 @@ scatterplotServer <- function(id, dataset) {
               colnames(df) <- str_replace_all(colnames(df), "_", "")
               
               oldNames <- colnames(df)
-              newNames <- make_unique(oldNames, sep = ".")
+              newNames <- makeUnique(oldNames, sep = ".")
+              
+              updateCheckboxGroupInput(session, 
+                                       "sampleChoices", 
+                                       choices = unique(oldNames[-1]))
               
               names(df) <- newNames
               
-              replicateList <- data.frame()
+              dataList[[paste0(data, " ", file)]] <<- df
               
-              lapply(unique(oldNames), function(name) {
-                
-                duplicateNames <- str_extract(newNames, regex(paste0(name, ".+"), ignore_case = TRUE, dotall = TRUE))
-                duplicateNames <- na.omit(duplicateNames)
-                
-                replicates <- data.frame()
-                lapply(duplicateNames, function(duplicate) {
-                  replicate <- df %>% dplyr::select(duplicate)
-                  replicates <<- append(replicates, replicate)
-                  
-                })
-                replicates <- bind_cols(replicates)
-                replicates <- filter(replicates, rowSums(replicates) < 30)
-                replicateList <<- append(replicateList, replicates)
-              })
-              print(replicateList)
-             dataList[[paste0(data, " ", file)]] <<- replicateList
-
-            }, error = function(cond) {
-              print(cond)
-              showModal(modalDialog(
-                title = "Incorrect format",
-                "Please check that data is formatted correctly",
-                easyClose = TRUE
-              ))
             })
           }
         })
         return(dataList)
       })
+        
+      df <- reactive({   
+        print(colnames(data()[[1]]))
+        print(input$sampleChoices)
+        dataList <- list()
+        replicateList <- data.frame()
+        
+        lapply(input$sampleChoices, function(name) {
+          df <- data()[[1]]
+          duplicateNames <- str_extract(colnames(df[-1]), regex(paste0(name, ".+"), ignore_case = TRUE, dotall = TRUE))
+          duplicateNames <- na.omit(duplicateNames)
+          
+          replicates <- data.frame()
+          print(duplicateNames)
+          lapply(duplicateNames, function(duplicate) {
+            replicate <- df %>% dplyr::select(duplicate)
+            replicates <<- append(replicates, replicate)
+            
+          })
+          replicates <- bind_cols(replicates)
+          replicates[rowSums(replicates) < 30, ] <- NA
+          replicateList <<- append(replicateList, replicates)
+        })
+        dataList <- append(dataList, replicateList)
+       #dataList[[paste0(data, " ", file)]] <- replicateList
+        return(replicateList)
+      })
       
      output$scatterplot <- renderPlot({
-      # print(data())
-       df <- bind_rows(data())
-       print(df)
+       df <- bind_rows(df())
+       df <- as.data.frame(df)
        scatterplot <- ggpairs(df)
-       
+       print(scatterplot)
      })
   })
 }
