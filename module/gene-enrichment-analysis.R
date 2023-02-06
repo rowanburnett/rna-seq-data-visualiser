@@ -5,6 +5,10 @@ geneEnrichmentUI <- function(id, label = "Volcano plot") {
       box(
         title = "Select data",
         htmlOutput(ns("dataChoices")),
+        
+        textInput(ns("title"),
+                  "Plot title"),
+        
         wellPanel(
           "Significance cutoff values",
           
@@ -120,7 +124,9 @@ geneEnrichmentServer <- function(id, dataset) {
             
             gostresCluster <- new("compareClusterResult", compareClusterResult = gostres)
             
-            dotPlot <- enrichplot::dotplot(gostresCluster, by = "Count")
+            dotPlot <- enrichplot::dotplot(gostresCluster, 
+                                           title = input$title,
+                                           by = "Count")
             
             # download current plot
             output[[paste0("plotDownload", i)]] <- generatePlotDownload(input[[paste0("plotFileName", i)]], 

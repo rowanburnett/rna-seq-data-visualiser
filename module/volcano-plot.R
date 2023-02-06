@@ -4,8 +4,12 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
     htmlOutput(ns("plots"),
                label = "Volcano plot"),
     box(
+      title = "Select data",
       htmlOutput(ns("dataChoices")),
-  
+      
+      textInput(ns("title"),
+                "Plot title"),
+      
       wellPanel(
         "Significance cutoff values",
         
@@ -131,6 +135,7 @@ volcanoPlotServer <- function(id, dataset) {
             
             # draw volcano plot
             volcanoPlot <- EnhancedVolcano(data, lab = data$symbol, x = "log2FoldChange", y = "padj",
+                            title = input$title,
                             pCutoff = input$pvalue,
                             FCcutoff = input$log2foldchange,
                             xlim = c(-input$lfcLimit, input$lfcLimit),
