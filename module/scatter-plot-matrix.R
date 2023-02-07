@@ -1,9 +1,9 @@
-scatterplotUI <- function(id, label = "Scatterplot matrix") {
+scatterPlotUI <- function(id, label = "Scatter plot matrix") {
   ns <- NS(id)
   
   fluidRow(
     box(
-      title = "Scatterplot matrix", collapsible = TRUE,
+      title = "Scatter plot matrix", collapsible = TRUE,
       plotOutput(
         ns("scatterplot"),
         height = "700px",
@@ -14,7 +14,9 @@ scatterplotUI <- function(id, label = "Scatterplot matrix") {
     box(
       htmlOutput(ns("dataChoices")),
       checkboxGroupInput(ns("sampleChoices"),
-                         "Samples")
+                         "Samples"),
+      textInput(ns("title"),
+                "Plot title")
     ),
     
     box(
@@ -24,7 +26,7 @@ scatterplotUI <- function(id, label = "Scatterplot matrix") {
   )
 }
 
-scatterplotServer <- function(id, dataset) {
+scatterPlotServer <- function(id, dataset) {
   moduleServer(
     id,
     
@@ -88,7 +90,6 @@ scatterplotServer <- function(id, dataset) {
       df <- reactive({   
         print(colnames(data()[[1]]))
         print(input$sampleChoices)
-        dataList <- list()
         replicateList <- data.frame()
         
         lapply(input$sampleChoices, function(name) {
@@ -107,17 +108,25 @@ scatterplotServer <- function(id, dataset) {
           replicates[rowSums(replicates) < 30, ] <- NA
           replicateList <<- append(replicateList, replicates)
         })
-        dataList <- append(dataList, replicateList)
-       #dataList[[paste0(data, " ", file)]] <- replicateList
         return(replicateList)
       })
       
-     output$scatterplot <- renderPlot({
-       df <- bind_rows(df())
-       df <- as.data.frame(df)
-       scatterplot <- ggpairs(df)
-       print(scatterplot)
-     })
+      plotLine <- function(data, mapping) {
+        p <- ggplot(data = data, mapping = mapping) +
+          geom_point(size = 1)
+        p + geom_abline(color = "red")
+      }
+      
+      output$scatterplot <- renderPlot({
+        df <- bind_rows(df())
+        df <- as.data.frame(df)
+        df <- log2(df + 0.8)
+        ggpairs(df, progress = FALSE,
+                title = input$title,
+                xlab = "Sample",
+                ylab = "Counts",
+                lower = list(continuous = wrap(plotLine)))
+      })
   })
 }
 
