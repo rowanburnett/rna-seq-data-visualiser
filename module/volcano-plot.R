@@ -93,7 +93,7 @@ volcanoPlotServer <- function(id, dataset) {
               df <- dplyr::select(df, log2FoldChange, padj, id) %>%
                 mutate("-log10(padj)" = -log10(padj)) %>%
                 na.omit()
-              df <- mutate(df, "symbol" = get_gene_names(df))
+              df <- mutate(df, "symbol" = getGeneNames(df))
               
               dataList[[paste0(data, " ", file)]] <<- df
               
@@ -110,7 +110,7 @@ volcanoPlotServer <- function(id, dataset) {
       })
       
       # get gene symbols from gene ids
-      get_gene_names <- function(df) {
+      getGeneNames <- function(df) {
         symbols <- mapIds(org.Dm.eg.db, 
                           keys = df$id, 
                           keytype = "FLYBASE", 
@@ -183,9 +183,11 @@ volcanoPlotServer <- function(id, dataset) {
               )
               
               # get gene summary from flybase api
-              res <- GET(paste0("https://api.flybase.org/api/v1.0/gene/summaries/auto/", gene$id))
-              summary <- fromJSON(rawToChar(res$content))
+              summary <- GET(paste0("https://api.flybase.org/api/v1.0/gene/summaries/auto/", gene$id))
+              summary <- fromJSON(rawToChar(summary$content))
               summary <- summary$resultset$result$summary
+              
+              link <- paste0("https://flybase.org/reports/", gene$id, ".html")
               
               output$geneInfo <- renderUI(
                 tagList(
@@ -203,7 +205,10 @@ volcanoPlotServer <- function(id, dataset) {
                     span(gene$padj)),
                   div(
                     span("Gene summary:", style = "font-weight: bold;"),
-                    span(summary))
+                    span(summary)),
+                  a("FlyBase Gene Report", 
+                    href = link,
+                    target = "_blank")
                 )
               )
             }, error = function(cond) {
