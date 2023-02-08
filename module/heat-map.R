@@ -4,10 +4,9 @@ heatMapUI <- function(id, label = "Heat map") {
       fluidRow(
         box(
           title = "Heat map", collapsible = TRUE,
-          plotlyOutput(
+          plotOutput(
             ns("heatMap"),
             height = "700px"
-          #  click = ns("plotClick")
           )
         ),
         
@@ -38,9 +37,6 @@ heatMapServer <- function(id, dataset) {
       # need to use session namespace for ui elements created in server function
       ns <- session$ns
       
-      obs <- list()
-      val <- reactiveValues()
-      
       # create checkboxes from selected files in sidebar
       output$dataChoices <- renderUI({
         generateCheckboxes(dataset(), ns)
@@ -64,6 +60,7 @@ heatMapServer <- function(id, dataset) {
                                file, 
                                na = "NA", 
                                .name_repair = "minimal")
+              print(colnames(df))
               
             } else if (ext == "csv") {
               df <- read.csv(paste0("./data/Uploads/", data))
@@ -74,18 +71,20 @@ heatMapServer <- function(id, dataset) {
             tryCatch({
               if ("log2FoldChange" %in% colnames(df)) {
                 df[,-1] <- lapply(df[,-1], as.numeric)
-                df <- dplyr::select(df, id, log2FoldChange, padj, lfcSE) %>%
+                df <- dplyr::select(df, id, log2FoldChange) %>%
                   na.omit() %>%
                   dplyr::filter(id %in% gene_list)
+                colnames(df)[2] <- file
+                df <- column_to_rownames(df, "id")
                 
               } else {
                 df[,-1] <- lapply(df[,-1], as.numeric)
                 df <- dplyr::filter(df, id %in% gene_list) %>%
+                  column_to_rownames("id") %>%
                   na.omit()
               }
               
-              df <- mutate(df, "symbol" = getGeneNames(df))
-              dataList[[paste0(tools::file_path_sans_ext(data), " ", tools::file_path_sans_ext(file))]] <<- df
+              dataList[[paste0(data, " ", tools::file_path_sans_ext(file))]] <<- df
               
             }, error = function(cond) {
                 showModal(modalDialog(
@@ -97,98 +96,21 @@ heatMapServer <- function(id, dataset) {
           }
         })
         
-      #  dataList <- bind_cols(dataList)
-        dataList <- bind_rows(dataList, .id = "Sample")
+        dataList <- bind_cols(dataList) %>%
+          as.matrix()
 
         return(dataList)
       })
       
-      # get gene symbols from gene ids
-      getGeneNames <- function(df) {
-        symbols <- mapIds(org.Dm.eg.db, 
-                          keys = df$id, 
-                          keytype = "FLYBASE", 
-                          column = "SYMBOL")
-      }
-      
-      output$heatMap <- renderPlotly({
-        print(data())
-        dataMatrix <- select(data(), Sample, id, log2FoldChange)
-     #   dataMatrix <- as.matrix(dataMatrix)
-        print(dataMatrix)
-      #  clusters <- as.dendrogram(hclust(dist(dataMatrix)))
+      output$heatMap <- renderPlot({
+        # colours for heat map
+        colorScale <- colorRamp2(c(3, 0, -3), c("yellow", "white", "blue"))
         
-        heatMap <- ggplot(data(), aes(Sample, id, fill = log2FoldChange)) +
-          geom_tile() +
-          theme(legend.position = "bottom",
-                axis.text.x = element_text(angle = 90))
-        
-    #    dendro <- ggplot(data(), aes(Sample, id)) +
-    #      ggdendrogram(clusters)
-        
-    #    print(dendro)
-        
-        heatmaply(data())
-     #   barPlot <- ggplot(data(), aes(log2FoldChange, id)) +
-    #      geom_col() +
-     #     theme(axis.text.y = element_blank())
-        
-       # ggarrange(heatMap, barPlot, ncol = 2, widths = c(3, 1))
-    #    subplot(dendro, heatMap, barPlot)
+        heatmap <- Heatmap(data(),
+                           col = colorScale,
+                           column_title = input$title,
+                           column_title_gp = gpar(fontsize = 20, fontface = "bold"))
+        draw(heatmap)
       })
-      
-      # extra gene information
-      observeEvent(input$plotClick, {
-            data <- data()
-            
-            tryCatch({
-              print(input$plotClick)
-              gene <- nearPoints(
-                data,
-                input$plotClick,
-                xvar = "Sample",
-                yvar = "id",
-                threshold = 100,
-                maxpoints = 1
-              )
-              
-              print(gene)
-              
-              # get gene summary from flybase api
-           #   summary <- GET(paste0("https://api.flybase.org/api/v1.0/gene/summaries/auto/", gene$id))
-            #  summary <- fromJSON(rawToChar(summary$content))
-             # summary <- summary$resultset$result$summary
-              
-              link <- paste0("https://flybase.org/reports/", gene$id, ".html")
-              
-              output$geneInfo <- renderUI(
-                tagList(
-                  div(
-                    span("Symbol:", style = "font-weight: bold;"),
-                    span(gene$symbol)),
-                  div(
-                    span("ID:", style = "font-weight: bold;"),
-                    span(gene$id)),
-                  div(
-                    span("Log2 fold change:", style = "font-weight: bold;"),
-                    span(gene$log2FoldChange)),
-                  div(
-                    span("p-value:", style = "font-weight: bold;"),
-                    span(gene$padj)),
-          #        div(
-           #         span("Gene summary:", style = "font-weight: bold;"),
-            #        span(summary)),
-                  a("FlyBase Gene Report", 
-                    href = link,
-                    target = "_blank")
-                )
-              )
-            }, error = function(cond) {
-              print(cond)
-            })
-            
-            val[[id]] <- input[[id]]$x
-          }, ignoreInit = TRUE)
-
     })
 }
