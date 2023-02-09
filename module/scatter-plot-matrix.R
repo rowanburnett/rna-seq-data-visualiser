@@ -16,12 +16,15 @@ scatterPlotUI <- function(id, label = "Scatter plot matrix") {
       checkboxGroupInput(ns("sampleChoices"),
                          "Samples"),
       textInput(ns("title"),
-                "Plot title")
-    ),
-    
-    box(
-      title = "Extra information",
-      htmlOutput(ns("geneInfo"))
+                "Plot title"),
+      textInput(ns("plotFileName"),
+                "File name"),
+      selectInput(ns("plotExtension"),
+                  "File extension",
+                  choices = c(".png", ".jpeg", ".bpm", ".pdf")),
+      downloadButton(ns("plotDownload"),
+                     "Download plot")
+      
     )
   )
 }
@@ -88,8 +91,7 @@ scatterPlotServer <- function(id, dataset) {
       })
         
       df <- reactive({   
-        print(colnames(data()[[1]]))
-        print(input$sampleChoices)
+        req(data())
         replicateList <- data.frame()
         
         lapply(input$sampleChoices, function(name) {
@@ -98,7 +100,6 @@ scatterPlotServer <- function(id, dataset) {
           duplicateNames <- na.omit(duplicateNames)
           
           replicates <- data.frame()
-          print(duplicateNames)
           lapply(duplicateNames, function(duplicate) {
             replicate <- df %>% dplyr::select(duplicate)
             replicates <<- append(replicates, replicate)
@@ -112,20 +113,32 @@ scatterPlotServer <- function(id, dataset) {
       })
       
       plotLine <- function(data, mapping) {
+        maxVal <- max(data[,-1])
+        minVal <- min(data[,-1])
+        maxRange <- c(minVal, maxVal)
+        
         p <- ggplot(data = data, mapping = mapping) +
-          geom_point(size = 1)
-        p + geom_abline(color = "red")
+          geom_point(shape = ".") +
+          geom_abline(color = "red") +
+          coord_cartesian(xlim = c(maxRange[1], maxRange[2]),
+                          ylim = c(maxRange[1], maxRange[2]))
       }
       
       output$scatterplot <- renderPlot({
         df <- bind_rows(df())
+        df <- varianceStabilizingTransformation(round(as.matrix(df)))
         df <- as.data.frame(df)
-        df <- log2(df + 0.8)
-        ggpairs(df, progress = FALSE,
+     #   df <- log2(df + 0.8)
+        scatterplot <- ggpairs(df, progress = FALSE,
                 title = input$title,
-                xlab = "Sample",
-                ylab = "Counts",
                 lower = list(continuous = wrap(plotLine)))
+        
+        # download current plot
+        output$plotDownload <- generatePlotDownload(input$plotFileName, 
+                                                    input$plotExtension,
+                                                    scatterplot)
+        
+        return(scatterplot)
       })
   })
 }
