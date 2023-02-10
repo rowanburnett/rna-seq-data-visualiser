@@ -15,12 +15,17 @@ library(gprofiler2)
 library(enrichplot)
 library(DOSE)
 library(GGally)
+library(DESeq2)
+library(plotly)
+library(gplots)
+library(heatmaply)
 
 source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
 source("./module/file-manager.R", local = TRUE)
 source("./module/gene-enrichment-analysis.R", local = TRUE)
 source("./module/scatter-plot-matrix.R", local = TRUE)
+source("./module/box-plot.R", local = TRUE)
 source("./function/generate-ui.R")
 
 ui <- fluidPage(
@@ -36,6 +41,7 @@ ui <- fluidPage(
         menuItem("Heat map", tabName = "heatMap"),
         menuItem("Gene set enrichment analysis (GSEA)", tabName = "geneEnrichment"),
         menuItem("Scatter plot matrix", tabName = "scatterPlot"),
+        menuItem("Box plot", tabName = "boxPlot"),
         fileManagerUI("fileManager")
       )
     ),
@@ -48,7 +54,9 @@ ui <- fluidPage(
         tabItem(tabName = "scatterPlot",
                 scatterPlotUI("scatterPlot")), 
         tabItem(tabName = "geneEnrichment",
-                geneEnrichmentUI("geneEnrichment"))
+                geneEnrichmentUI("geneEnrichment")),
+        tabItem(tabName = "boxPlot",
+                boxPlotUI("boxPlot"))
       )
     )
   )
@@ -61,6 +69,7 @@ server <- function(input, output, session) {
   heatMap <- heatMapServer("heatMap", dataset = files)
   geneEnrichment <- geneEnrichmentServer("geneEnrichment", dataset = files)
   scatterPlot <- scatterPlotServer("scatterPlot", dataset = files)
+  boxPlot <- boxPlotServer("boxPlot", dataset = files)
 }
 
 shinyApp(ui = ui, server = server)
