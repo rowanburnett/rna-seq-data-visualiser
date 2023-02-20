@@ -4,7 +4,7 @@ heatMapUI <- function(id, label = "Heat map") {
       fluidRow(
         box(
           title = "Heat map", collapsible = TRUE,
-          plotOutput(
+          plotlyOutput(
             ns("heatMap"),
             height = "700px"
           )
@@ -16,15 +16,20 @@ heatMapUI <- function(id, label = "Heat map") {
           
           textInput(ns("title"),
                     "Plot title"),
+          textInput(ns("plotFileName"),
+                    "File name"),
+          selectInput(ns("plotExtension"),
+                      "File extension",
+                      choices = c(".png", ".jpeg", ".bpm", ".pdf")),
+          downloadButton(ns("plotDownload"),
+                         "Download plot"),
           
-          textAreaInput(ns("gene_list"),
+          textAreaInput(ns("geneList"),
                         label = "Enter a list of FlyBase IDs:",
-                        placeholder = "FBgn0000123...")
-        ),
-        
-        box(
-          title = "Extra information",
-          htmlOutput(ns("geneInfo"))
+                        placeholder = "FBgn0000123..."),
+          
+          checkboxInput(ns("showGenes"),
+                        "Show gene IDs")
         )
       )
 }
@@ -48,7 +53,7 @@ heatMapServer <- function(id, dataset) {
         
         # use regular expression to get gene IDs out of input
         regFilter <- regex("FBGN\\d\\d\\d\\d\\d\\d\\d", ignore_case = TRUE, )
-        gene_list <- as.list(str_extract_all(input$gene_list, regFilter))[[1]]
+        geneList <- as.list(str_extract_all(input$geneList, regFilter))[[1]]
         
         lapply(dataset(), function(data) {
           for (file in input[[data]]) {
@@ -60,7 +65,6 @@ heatMapServer <- function(id, dataset) {
                                file, 
                                na = "NA", 
                                .name_repair = "minimal")
-              print(colnames(df))
               
             } else if (ext == "csv") {
               df <- read.csv(paste0("./data/Uploads/", data))
@@ -72,19 +76,17 @@ heatMapServer <- function(id, dataset) {
               if ("log2FoldChange" %in% colnames(df)) {
                 df[,-1] <- lapply(df[,-1], as.numeric)
                 df <- dplyr::select(df, id, log2FoldChange) %>%
-                  na.omit() %>%
-                  dplyr::filter(id %in% gene_list)
+                  dplyr::filter(id %in% geneList)
                 colnames(df)[2] <- file
-                df <- column_to_rownames(df, "id")
                 
               } else {
                 df[,-1] <- lapply(df[,-1], as.numeric)
-                df <- dplyr::filter(df, id %in% gene_list) %>%
-                  column_to_rownames("id") %>%
-                  na.omit()
+                df <- dplyr::filter(df, id %in% geneList)
               }
               
-              dataList[[paste0(data, " ", tools::file_path_sans_ext(file))]] <<- df
+              df <- df[order(df$id),]
+              df <- column_to_rownames(df, "id")
+              dataList[[paste0(tools::file_path_sans_ext(file))]] <<- df
               
             }, error = function(cond) {
                 showModal(modalDialog(
@@ -96,21 +98,31 @@ heatMapServer <- function(id, dataset) {
           }
         })
         
-        dataList <- bind_cols(dataList) %>%
-          as.matrix()
-
+        dataList <- bind_cols(dataList)
         return(dataList)
       })
       
-      output$heatMap <- renderPlot({
-        # colours for heat map
-        colorScale <- colorRamp2(c(3, 0, -3), c("yellow", "white", "blue"))
+      output$heatMap <- renderPlotly({
+        req(input$geneList)
+
+        if (input$showGenes) {
+          showLabels <<- c(TRUE, TRUE)
+        } else {
+          showLabels <<- c(TRUE, FALSE)
+        }
+
+        heatMap <- heatmaply(data(),
+                            label_names = c("Gene", "Sample", "Log2 fold change"),
+                            main = input$title,
+                            scale_fill_gradient_fun = scale_fill_gradientn(
+                              colours = c("blue", "white", "red"),
+                              limits = c(-3, 3),
+                              oob = scales::squish
+                            ),
+                            showticklabels = showLabels,
+                            margins = c(150, 50, 100, 0))
         
-        heatmap <- Heatmap(data(),
-                           col = colorScale,
-                           column_title = input$title,
-                           column_title_gp = gpar(fontsize = 20, fontface = "bold"))
-        draw(heatmap)
+        return(heatMap)
       })
     })
 }
