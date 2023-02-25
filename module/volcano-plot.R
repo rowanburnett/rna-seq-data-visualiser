@@ -10,6 +10,9 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
       textInput(ns("title"),
                 "Plot title"),
       
+      checkboxInput(ns("useNonAdjusted"),
+                    "Use non-adjusted p-values"),
+      
       wellPanel(
         "Significance cutoff values",
         
@@ -26,20 +29,19 @@ volcanoPlotUI <- function(id, label = "Volcano plot") {
                      step = 0.01)
       ),
       
-      numericInput(ns("lfcLimit"),
-                   label = "Maximum log2 fold change to display",
-                   value = 10,
-                   min = 0,
-                   step = 0.01),
+      wellPanel(
+        "Axis limits",
+        textInput(ns("lfcLimit"),
+                     label = "Maximum log2 fold change to display"),
+        textInput(ns("pvalueLimit"),
+                     label = "Smallest p-value to display")
+      ),
       
-      numericInput(ns("pvalueLimit"),
-                   label = "Smallest p-value to display",
-                   value = 10e-12,
-                   min = 0,
-                   step = 0.01),
+      checkboxInput(ns("convertIDs"),
+                    "Convert gene IDs to gene symbols"),
       
       textAreaInput(ns("geneList"),
-                    label = "Enter a list of gene symbols to label",
+                    label = "Enter a list of gene IDs/symbols to label",
                     placeholder = "")
     ),
     
@@ -90,7 +92,7 @@ volcanoPlotServer <- function(id, dataset) {
               # convert columns to numeric because excel files save in the wrong format
               df[,-1] <- lapply(df[,-1], as.numeric)
               colnames(df)[1] <- "id"
-              df <- dplyr::select(df, log2FoldChange, padj, id) %>%
+              df %>%
                 mutate("-log10(padj)" = -log10(padj)) %>%
                 na.omit()
               df <- mutate(df, "symbol" = getGeneNames(df))
@@ -121,35 +123,70 @@ volcanoPlotServer <- function(id, dataset) {
       observe({
         lapply(seq(data()), function(i){
           output[[paste0("plot", i) ]] <- renderPlot({
-            data <- data()[[i]]
+            df <- data()[[i]]
 
             # list of genes to label on the plot (optional)
-            geneList <- as.list(el(strsplit(input$geneList, " ")))
+            geneList <- as.list(str_split(input$geneList, regex("\\s", ignore_case = TRUE)))
             
             # if list of genes is provided then use it
-            if (length(geneList) > 0) {
-              labelledGenes <<- isolate(geneList())
+            if (geneList[[1]][1] != "") {
+              labelledGenes <<- geneList[[1]]
+              overlap <<- Inf
+              connectors <<- TRUE
             } else {
               labelledGenes <<- NULL
+              overlap <<- 10
+              connectors <<- FALSE
+            }
+            
+            if (input$useNonAdjusted) {
+              pvals <<- "pvalue"
+              pmaximum <<- max(-log10(df$pvalue), na.rm = TRUE)
+            } else {
+              pvals <<- "padj"
+              pmaximum <<- max(-log10(df$padj), na.rm = TRUE)
+            }
+            
+            if (input$convertIDs) {
+              label <<- df$symbol
+            } else {
+              label <<- df$id
+            }
+            
+            if (input$lfcLimit != "") {
+              xLimit <<- c(-as.numeric(input$lfcLimit), as.numeric(input$lfcLimit))
+            } else {
+              xLimit <<- c(min(df$log2FoldChange, na.rm=TRUE) - 1.5,
+                       max(df$log2FoldChange, na.rm=TRUE) + 1.5)
+            }
+            
+            if (input$pvalueLimit != "") {
+              yLimit <<- c(0, -log10(as.numeric(input$pvalueLimit)))
+            } else {
+              yLimit <<- c(0, pmaximum + 5)
             }
             
             # draw volcano plot
-            volcanoPlot <- EnhancedVolcano(data, lab = data$symbol, x = "log2FoldChange", y = "padj",
+            volcanoPlot <- EnhancedVolcano(df, lab = label, x = "log2FoldChange", y = pvals,
                             title = input$title,
                             pCutoff = input$pvalue,
                             FCcutoff = input$log2foldchange,
-                            xlim = c(-input$lfcLimit, input$lfcLimit),
-                            ylim = c(0, -log10(input$pvalueLimit)),
+                            xlim = xLimit,
+                            ylim = yLimit,
                             selectLab = labelledGenes,
-                            legendLabels = c('Not sig.','Log (base 2) FC','p-value',
-                                             'p-value & Log (base 2) FC'),
+                            legendLabels = c('Not sig.','Log2 FC','p-value',
+                                             'p-value & Log2 FC'),
                             legendPosition = "bottom",
-                            legendLabSize = 14,
-                            legendIconSize = 4.0,
+                            legendLabSize = 12,
+                            legendIconSize = 3.0,
+                            drawConnectors = connectors,
+                            widthConnectors = 0.75,
+                            max.overlaps = overlap,
                             caption = paste0("Log2 fold change cutoff, ", 
                                              input$log2foldchange, "; ", 
                                              "p-value cutoff, ", 
                                              input$pvalue))
+            
             
             # download current plot
             output[[paste0("plotDownload", i)]] <- generatePlotDownload(input[[paste0("plotFileName", i)]], 
@@ -181,6 +218,7 @@ volcanoPlotServer <- function(id, dataset) {
                 yvar = "-log10(padj)",
                 maxpoints = 1
               )
+              print(gene)
               
               # get gene summary from flybase api
               summary <- GET(paste0("https://api.flybase.org/api/v1.0/gene/summaries/auto/", gene$id))
