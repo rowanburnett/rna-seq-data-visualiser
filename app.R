@@ -19,6 +19,9 @@ library(DESeq2)
 library(plotly)
 library(gplots)
 library(heatmaply)
+library(egg)
+library(scales)
+library(ggpubr)
 
 source("./module/volcano-plot.R", local = TRUE)
 source("./module/heat-map.R", local = TRUE)
@@ -63,7 +66,6 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-  options(shiny.reactlog=TRUE)
   files <- fileManagerServer("fileManager")
   volcano <- volcanoPlotServer("volcanoPlot", dataset = files)
   heatMap <- heatMapServer("heatMap", dataset = files)

@@ -1,36 +1,44 @@
 heatMapUI <- function(id, label = "Heat map") {
   ns <- NS(id)
 
-      fluidRow(
-        box(
-          title = "Heat map", collapsible = TRUE,
-          plotlyOutput(
-            ns("heatMap"),
-            height = "700px"
+      fluidPage(
+        column(7,
+          box(
+            title = "Heat map",
+            width = "100%",
+            plotlyOutput(
+              ns("heatMap"),
+              height = "700px"
+            )
           )
         ),
         
-        box(
-          title = "Select data",
-          htmlOutput(ns("dataChoices")),
-          
-          textInput(ns("title"),
-                    "Plot title"),
-          textInput(ns("plotFileName"),
-                    "File name"),
-          selectInput(ns("plotExtension"),
-                      "File extension",
-                      choices = c(".png", ".jpeg", ".bpm", ".pdf")),
-          downloadButton(ns("plotDownload"),
-                         "Download plot"),
-          
-          textAreaInput(ns("geneList"),
-                        label = "Enter a list of FlyBase IDs:",
-                        placeholder = "FBgn0000123..."),
-          
-          checkboxInput(ns("showGenes"),
-                        "Show gene IDs")
-        )
+        column(5,
+          box(
+            title = "Select data",
+            width = "100%",
+            htmlOutput(ns("dataChoices")),
+            
+            textInput(ns("title"),
+                      "Plot title"),
+            
+            textAreaInput(ns("geneList"),
+                          label = "Enter a list of FlyBase IDs:",
+                          placeholder = "FBgn0000123..."),
+            
+            checkboxInput(ns("showGenes"),
+                          "Show gene IDs"),
+            
+            wellPanel("Scale for heat map colours",
+              numericInput(ns("scaleMin"),
+                           "Minimum",
+                           value = -3),
+              numericInput(ns("scaleMax"),
+                           "Maximum",
+                           value = 3)
+            )
+          )
+        ),
       )
 }
 
@@ -52,8 +60,8 @@ heatMapServer <- function(id, dataset) {
         dataList <- list()
         
         # use regular expression to get gene IDs out of input
-        regFilter <- regex("FBGN\\d\\d\\d\\d\\d\\d\\d", ignore_case = TRUE, )
-        geneList <- as.list(str_extract_all(input$geneList, regFilter))[[1]]
+        geneList <- as.list(str_split(input$geneList, regex("\\s", ignore_case = TRUE)))[[1]]
+        print(geneList)
         
         lapply(dataset(), function(data) {
           for (file in input[[data]]) {
@@ -71,21 +79,18 @@ heatMapServer <- function(id, dataset) {
             }
             
             colnames(df)[1] <- "id"
+            df[,-1] <- lapply(df[,-1], as.numeric)
             
             tryCatch({
-              if ("log2FoldChange" %in% colnames(df)) {
-                df[,-1] <- lapply(df[,-1], as.numeric)
-                df <- dplyr::select(df, id, log2FoldChange) %>%
-                  dplyr::filter(id %in% geneList)
-                colnames(df)[2] <- file
-                
-              } else {
-                df[,-1] <- lapply(df[,-1], as.numeric)
-                df <- dplyr::filter(df, id %in% geneList)
-              }
-              
+              print(colnames(df))
               df <- df[order(df$id),]
+              df <- dplyr::filter(df, id %in% geneList)
+              if ("log2FoldChange" %in% colnames(df)) {
+                df <- dplyr::select(df, id, log2FoldChange)
+                colnames(df)[2] <- file
+              } 
               df <- column_to_rownames(df, "id")
+              print(df)
               dataList[[paste0(tools::file_path_sans_ext(file))]] <<- df
               
             }, error = function(cond) {
@@ -116,7 +121,7 @@ heatMapServer <- function(id, dataset) {
                             main = input$title,
                             scale_fill_gradient_fun = scale_fill_gradientn(
                               colours = c("blue", "white", "red"),
-                              limits = c(-3, 3),
+                              limits = c(input$scaleMin, input$scaleMax),
                               oob = scales::squish
                             ),
                             showticklabels = showLabels,

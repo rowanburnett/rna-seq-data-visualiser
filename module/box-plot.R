@@ -2,25 +2,37 @@ boxPlotUI <- function(id, label = "Box plot matrix") {
   ns <- NS(id)
   
   fluidRow(
-    box(
-      title = "Box plot", collapsible = TRUE,
-      plotOutput(
-        ns("boxPlot")
+    column(7,
+      box(
+        title = "Box plot", 
+        width = "100%",
+        height = "100%",
+        plotOutput(
+          ns("boxPlot"),
+          height = "700px"
+        )
       )
     ),
     
-    box(
-      htmlOutput(ns("dataChoices")),
-      checkboxGroupInput(ns("sampleChoices"),
-                         "Samples"),
-      textInput(ns("plotFileName"),
-                "File name"),
-      selectInput(ns("plotExtension"),
-                  "File extension",
-                  choices = c(".png", ".jpeg", ".bpm", ".pdf")),
-      downloadButton(ns("plotDownload"),
-                     "Download plot")
-    )
+    column(5,
+      box(
+        width = "100%",
+        title = "Select data",
+        htmlOutput(ns("dataChoices")),
+        checkboxGroupInput(ns("sampleChoices"),
+                           "Samples"),
+        
+        wellPanel("Download options",
+          textInput(ns("plotFileName"),
+                    "File name"),
+          selectInput(ns("plotExtension"),
+                      "File extension",
+                      choices = c(".png", ".jpeg", ".bpm", ".pdf")),
+          downloadButton(ns("plotDownload"),
+                         "Download plot")
+        )
+      )
+    ),
   )
 }
 
@@ -65,9 +77,10 @@ boxPlotServer <- function(id, dataset) {
             tryCatch({
               # convert columns to numeric because excel files save in the wrong format
               df[,-1] <- lapply(df[,-1], as.numeric)
+              df <- df[,-1]
               
-              colnames(df) <- str_replace_all(colnames(df), "_", "")
-              
+              colnames(df) <- str_replace_all(colnames(df), "_", ".")
+
               oldNames <- colnames(df)
               newNames <- makeUnique(oldNames, sep = ".")
               
@@ -90,7 +103,7 @@ boxPlotServer <- function(id, dataset) {
         
         lapply(input$sampleChoices, function(name) {
           df <- data()[[1]]
-          duplicateNames <- str_extract(colnames(df[-1]), regex(paste0(name, ".+"), ignore_case = TRUE, dotall = TRUE))
+          duplicateNames <- str_extract(colnames(df), regex(paste0(name, ".+"), ignore_case = TRUE, dotall = TRUE))
           duplicateNames <- na.omit(duplicateNames)
           
           replicates <- data.frame()
@@ -100,7 +113,7 @@ boxPlotServer <- function(id, dataset) {
             
           })
           replicates <- bind_cols(replicates)
-         # replicates[rowSums(replicates) < 30, ] <- NA
+       #   replicates[rowSums(replicates) < 30, ] <- NA
           replicateList <<- append(replicateList, replicates)
         })
         return(replicateList)
@@ -110,21 +123,32 @@ boxPlotServer <- function(id, dataset) {
         req(length(data()) > 0)
         df <- bind_rows(df())
         df <- na.omit(df)
-        df <- varianceStabilizingTransformation(round(as.matrix(df)))
-       # df <- rlog(round(as.matrix(df)))
+        df <- varianceStabilizingTransformation(round(as.matrix(df))) # remove this if doing normalistion beforehand
         df <- as.data.frame(df)
-        print(min(df))
         
         boxPlot <- ggplot(stack(df), aes(x = ind, y = values)) + 
           geom_boxplot(na.rm = TRUE) +
           xlab("Sample") +
-          ylab("Count") 
+          ylab("Count")
         
         # download current plot
-        output$plotDownload <- generatePlotDownload(input$plotFileName, 
-                                                    input$plotExtension,
-                                                    boxPlot)
-        
+        output$plotDownload <- downloadHandler(
+          filename = function() {
+            paste0(input$plotFileName, input$plotExtension)
+          },
+          
+          content = function(file) {
+            tryCatch(
+              ggsave(
+                filename = file,
+                plot = boxPlot,
+                units = "in",
+                width = 7,
+                height = 7
+              )
+            ) 
+          }
+        )
         return(boxPlot)
       })
     })

@@ -1,53 +1,60 @@
 volcanoPlotUI <- function(id, label = "Volcano plot") {
   ns <- NS(id)
   fluidPage(
-    htmlOutput(ns("plots"),
-               label = "Volcano plot"),
-    box(
-      title = "Select data",
-      htmlOutput(ns("dataChoices")),
-      
-      textInput(ns("title"),
-                "Plot title"),
-      
-      checkboxInput(ns("useNonAdjusted"),
-                    "Use non-adjusted p-values"),
-      
-      wellPanel(
-        "Significance cutoff values",
-        
-        numericInput(ns("pvalue"),
-                     label = "p-value",
-                     value = 0.05,
-                     min = 0,
-                     step = 0.01),
-        
-        numericInput(ns("log2foldchange"),
-                     label = "Log2 fold change",
-                     value = 1.4,
-                     min = 0,
-                     step = 0.01)
-      ),
-      
-      wellPanel(
-        "Axis limits",
-        textInput(ns("lfcLimit"),
-                     label = "Maximum log2 fold change to display"),
-        textInput(ns("pvalueLimit"),
-                     label = "Smallest p-value to display")
-      ),
-      
-      checkboxInput(ns("convertIDs"),
-                    "Convert gene IDs to gene symbols"),
-      
-      textAreaInput(ns("geneList"),
-                    label = "Enter a list of gene IDs/symbols to label",
-                    placeholder = "")
+    column(7,
+      htmlOutput(ns("plots"),
+                 label = "Volcano plot")
     ),
-    
-    box(
-      title = "Extra information",
-      htmlOutput(ns("geneInfo"))
+    column(5,
+    box(title = "Extra information",
+        width = "100%",
+        htmlOutput(ns("geneInfo"))
+    )),
+    column(5,
+      box(
+        title = "Select data",
+        width = "100%",
+        htmlOutput(ns("dataChoices")),
+        
+        textInput(ns("title"),
+                  "Plot title"),
+        
+        checkboxInput(ns("useNonAdjusted"),
+                      "Use non-adjusted p-values"),
+        
+        wellPanel(
+          "Significance cutoff values",
+          
+          numericInput(ns("pvalue"),
+                       label = "p-value",
+                       value = 0.05,
+                       min = 0,
+                       step = 0.01),
+          
+          numericInput(ns("log2foldchange"),
+                       label = "Log2 fold change",
+                       value = 1.4,
+                       min = 0,
+                       step = 0.01)
+        ),
+        
+        wellPanel(
+          "Axis limits",
+          textInput(ns("lfcLimit"),
+                       label = "Maximum log2 fold change to display"),
+          textInput(ns("pvalueLimit"),
+                       label = "Smallest p-value to display")
+        ),
+        
+        wellPanel(
+          "Gene labels",
+          textAreaInput(ns("geneList"),
+                        label = "Enter a list of gene IDs/symbols to label",
+                        placeholder = ""),
+          checkboxInput(ns("convertIDs"),
+                        "Convert gene IDs to gene symbols")
+        )
+      )
     )
   )
 }
@@ -92,8 +99,8 @@ volcanoPlotServer <- function(id, dataset) {
               # convert columns to numeric because excel files save in the wrong format
               df[,-1] <- lapply(df[,-1], as.numeric)
               colnames(df)[1] <- "id"
-              df %>%
-                mutate("-log10(padj)" = -log10(padj)) %>%
+              df <- mutate(df, "-log10(padj)" = -log10(padj))
+              df <- mutate(df, "-log10(pvalue)" = -log10(pvalue)) %>%
                 na.omit()
               df <- mutate(df, "symbol" = getGeneNames(df))
               
@@ -218,7 +225,6 @@ volcanoPlotServer <- function(id, dataset) {
                 yvar = "-log10(padj)",
                 maxpoints = 1
               )
-              print(gene)
               
               # get gene summary from flybase api
               summary <- GET(paste0("https://api.flybase.org/api/v1.0/gene/summaries/auto/", gene$id))
@@ -261,7 +267,27 @@ volcanoPlotServer <- function(id, dataset) {
       
       # create tabBox with tab for each plot
       output$plots <- renderUI ({
-        generatePlotTabs(data(), "Volcano plot", ns)
+        do.call(tabBox, 
+        c(title = "Volcano plot",
+          width = "100%",
+          height = "700px",
+          side = "right", 
+          lapply(seq(data()), function(i) {
+            tabPanel(
+              title = names(data()[i]),
+              plotOutput(ns(paste0("plot", i)),
+                         height = "700px",
+                         click = ns(paste0("plotClick", i))),
+              textInput(ns(paste0("plotFileName", i)),
+                        "File name"),
+              selectInput(ns(paste0("plotExtension", i)),
+                          "File extension",
+                          choices = c(".png", ".jpeg", ".bpm", ".pdf")),
+              downloadButton(ns(paste0("plotDownload", i)),
+                             "Download plot")
+            )
+          }))
+        )
       })
     }
 )}
